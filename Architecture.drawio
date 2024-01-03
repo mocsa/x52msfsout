@@ -1,0 +1,61 @@
+<mxfile host="Electron" modified="2023-12-27T12:14:53.024Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/22.0.0 Chrome/114.0.5735.289 Electron/25.8.3 Safari/537.36" etag="NS5pY7aiDVeLA25euSQZ" version="22.0.0" type="device">
+  <diagram name="Page-1" id="36fVFwdLU3KJVhieT6A0">
+    <mxGraphModel dx="629" dy="566" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="2269" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" edge="1" parent="1" source="SrecMfxJfKZmhi1hkeHW-1" target="SrecMfxJfKZmhi1hkeHW-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-1" value="X-Plane" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="10" y="10" width="80" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" edge="1" parent="1" source="SrecMfxJfKZmhi1hkeHW-2" target="SrecMfxJfKZmhi1hkeHW-3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-2" value="FlyWithLua plugin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="110" y="10" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" edge="1" parent="1" source="SrecMfxJfKZmhi1hkeHW-3" target="SrecMfxJfKZmhi1hkeHW-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-3" value="X52LuaOut script for FlyWithLua" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="220" y="10" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=2;" edge="1" source="SrecMfxJfKZmhi1hkeHW-7" target="SrecMfxJfKZmhi1hkeHW-9" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-7" value="MSFS 2020" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="10" y="80" width="80" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" edge="1" source="SrecMfxJfKZmhi1hkeHW-9" target="SrecMfxJfKZmhi1hkeHW-10" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-9" value="x52msfsout.exe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="110" y="80" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" edge="1" parent="1" source="SrecMfxJfKZmhi1hkeHW-10" target="SrecMfxJfKZmhi1hkeHW-13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-10" value="cmds (a text file)" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=2;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="220" y="160" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-12" value="X52Pro joystick" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="235" y="240" width="80" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-18" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" edge="1" parent="1" source="SrecMfxJfKZmhi1hkeHW-13" target="SrecMfxJfKZmhi1hkeHW-16">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-13" value="Command Handler, written in Lua" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=2;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="35" y="160" width="90" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-19" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;" edge="1" parent="1" source="SrecMfxJfKZmhi1hkeHW-16" target="SrecMfxJfKZmhi1hkeHW-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="SrecMfxJfKZmhi1hkeHW-16" value="libusb (Windows)&lt;br&gt;libusb4java (Linux, Mac)" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=2;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="10" y="240" width="140" height="50" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

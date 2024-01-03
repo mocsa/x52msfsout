@@ -1,0 +1,32 @@
+  <master>
+    <target id="mfd" default="70" switch_dataref="ELECTRICAL MASTER BATTERY%Bool" op="==1" index="0" brightness_dataref="LIGHT GLARESHIELD:1%number" min="0" max="1">
+	</target>
+    <target id="led" default="70" switch_dataref="ELECTRICAL MASTER BATTERY%Bool" op="==1" brightness_dataref="LIGHT PANEL POWER SETTING%Percent" min="0" max="1">
+	</target>
+  </master>
+  <shift_states>
+    <shift_state name="mode1" button="28">
+      <shift_state name="mode1_shiftStick" button="6"></shift_state>
+    </shift_state>
+    <shift_state name="mode2" button="29">
+      <shift_state name="mode2_shiftStick" button="6"></shift_state>
+    </shift_state>
+    <shift_state name="mode3" button="30">
+      <shift_state name="mode3_shiftStick" button="6"></shift_state>
+    </shift_state>
+  </shift_states>
+  <assignments clear_all="false">
+    <!-- Throttle wheel press resets the elevator trim to zero -->
+    <!-- This sets the value of a SimVar (dataref) to a constant value. -->
+    <button nr="19" dataref="ELEVATOR TRIM POSITION%Radians" type="trigger_pos" on="0" >
+      <shifted_button shift_state="mode1_shiftStick" command="BRAKE TOGGLE" ></shifted_button>
+    </button>
+
+    <!-- Elevator trim one step Nose up -->
+    <!-- This triggers an Input (Key) Event (command). -->
+    <button nr="18" command="ELEV_TRIM_UP" type="trigger_pos" >
+    </button>
+    <!-- Elevator trim one step Nose down -->
+    <!-- This triggers an Input (Key) Event (command). -->
+    <button nr="17" command="ELEV_TRIM_DOWN" type="trigger_pos" />
+  </assignments>
