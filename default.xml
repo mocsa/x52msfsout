@@ -19,7 +19,7 @@
     <!-- Throttle wheel press resets the elevator trim to zero -->
     <!-- This sets the value of a SimVar (dataref) to a constant value. -->
     <button nr="19" dataref="ELEVATOR TRIM POSITION%Radians" type="trigger_pos" on="0" >
-      <shifted_button shift_state="mode1_shiftStick" command="BRAKE TOGGLE" ></shifted_button>
+      <shifted_button shift_state="mode1_shiftStick" command="Parking_Brakes" ></shifted_button>
     </button>
 
     <!-- Elevator trim one step Nose up -->
@@ -28,5 +28,5 @@
     </button>
     <!-- Elevator trim one step Nose down -->
     <!-- This triggers an Input (Key) Event (command). -->
-    <button nr="17" command="ELEV_TRIM_DOWN" type="trigger_pos" />
-  </assignments>
+    <button nr="17" command="ELEV_TRIM_DN" type="trigger_pos" />
+</assignments>
