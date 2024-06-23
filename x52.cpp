@@ -36,6 +36,10 @@ void X52::set_simconnect_handle(HANDLE handle) {
 	hSimConnect = handle;
 }
 
+void X52::set_xmlfile(boost::property_tree::ptree* file) {
+	xml_file = file;
+}
+
 void X52::heartbeat() {
 	if (X52_RUN_TIME - HEARTBEAT_TIME > 60) {
 		// Restart command handler as this script has been inactive for over a minute
@@ -79,6 +83,24 @@ void X52::write_shift(std::string on) {
 void X52::update_brightness(std::string id, std::string brightness) {
     m_cmd_file << "light " << id << " " << brightness << std::endl; // endl causes flush
     heartbeatReset();
+}
+
+
+bool X52::evaluate_xml_op(double simvarvalue, std::string op) {
+	std::string oper, value;
+
+	oper = op.substr(0, 2);
+	value = op.substr(2);
+	
+	if (oper == "==") {
+		return(std::stod(value) == simvarvalue);
+	} else if(oper == "--") {
+		return(simvarvalue < std::stod(value));
+	} else if (oper == "++") {
+		return(simvarvalue > std::stod(value));
+	} else {
+		return false;
+	}
 }
 
 void X52::execute_button_press(boost::property_tree::ptree &xmltree, int btn) {

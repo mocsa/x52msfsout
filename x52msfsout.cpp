@@ -113,23 +113,6 @@ enum DATA_REQUEST_ID {
 	REQ_ABSTIME,
 };
 
-bool evaluate_xml_op(double simvarvalue, std::string op) {
-	std::string oper, value;
-
-	oper = op.substr(0, 2);
-	value = op.substr(2);
-	
-	if (oper == "==") {
-		return(std::stod(value) == simvarvalue);
-	} else if(oper == "--") {
-		return(std::stod(value) < simvarvalue);
-	} else if (oper == "++") {
-		return(std::stod(value) > simvarvalue);
-	} else {
-		return false;
-	}
-}
-
 void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pContext)
 {
 	switch (pData->dwID)
@@ -137,18 +120,27 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 	case SIMCONNECT_RECV_ID_EVENT:
 	{
 		SIMCONNECT_RECV_EVENT* evt = (SIMCONNECT_RECV_EVENT*)pData;
+		// We made sure that our joy button press ClientEvents are numbered
+		// from myx52.EVENT_JOYBUTTON_PRESS to maximum myx52.EVENT_JOYBUTTON_PRESS + 100.
 		if (evt->uEventID >= myx52.EVENT_JOYBUTTON_PRESS &&
 			evt->uEventID < myx52.EVENT_JOYBUTTON_PRESS + 100)
 		{
+			// Store in our array that a button is currently pressed.
 			myx52.joybuttonstates[evt->uEventID - myx52.EVENT_JOYBUTTON_PRESS] = true;
 			myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), "Joy Button " + std::to_string(evt->uEventID - myx52.EVENT_JOYBUTTON_PRESS + 1) + " was pressed.");
+			
+			// Carry out actions declared in the assignments tag for button press
 			myx52.assignment_button_action(xml_file.get_child("assignments"), evt->uEventID - myx52.EVENT_JOYBUTTON_PRESS + 1, "pressed");
 		}
+		// We made sure that our joy button release ClientEvents are numbered
+		// from myx52.EVENT_JOYBUTTON_RELEASE to maximum myx52.EVENT_JOYBUTTON_RELEASE + 100.
 		if (evt->uEventID >= myx52.EVENT_JOYBUTTON_RELEASE &&
 			evt->uEventID < myx52.EVENT_JOYBUTTON_RELEASE + 100)
 		{
+			// Update our array that a button has been released.
 			myx52.joybuttonstates[evt->uEventID - myx52.EVENT_JOYBUTTON_RELEASE] = false;
 			myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), "Joy Button " + std::to_string(evt->uEventID - myx52.EVENT_JOYBUTTON_RELEASE + 1) + " was released.");
+			// Carry out actions declared in the assignments tag for button release
 			myx52.assignment_button_action(xml_file.get_child("assignments"), evt->uEventID - myx52.EVENT_JOYBUTTON_RELEASE + 1, "released");
 		}
 		break;
@@ -171,7 +163,7 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 					{
 						myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), fmt::format( "id={} Master switch={:.2f} Master brightness={:.2f}", v.second.get<std::string>("<xmlattr>.id").c_str(), pS->dataarray[targetnumber], pS->dataarray[targetnumber + 1]));
 						// Check if SimVar value equals operator in XML
-						if (evaluate_xml_op(pS->dataarray[targetnumber], v.second.get<std::string>("<xmlattr>.op"))) {
+						if (myx52.evaluate_xml_op(pS->dataarray[targetnumber], v.second.get<std::string>("<xmlattr>.op"))) {
 							if (v.second.get<std::string>("<xmlattr>.on", "") != "true") {
 								myx52.all_on(v.second.get<std::string>("<xmlattr>.id"), true);
 								v.second.put<std::string>("<xmlattr>.on", "true");
@@ -248,6 +240,7 @@ int main(int argc, char *argv[])
 
 	HRESULT hr;
 
+	// BEGIN Check command-line options
 	try
 	{
 		boost::program_options::options_description desc("Allowed options");
@@ -273,9 +266,15 @@ int main(int argc, char *argv[])
         std::cerr << "Unknown error during option processing!" << "\n";
         exit(EXIT_FAILURE);
     }
+	// END Check command-line options
 
-	// thread to read from stdin
+	// Thread to read from stdin
 	// Code was taken from https://gist.github.com/vmrob/ff20420a20c59b5a98a1
+	// Since waiting for the user to press the q key in the
+	// main thread would block our
+	// infinite MSFS processing loop, we need a separate
+	// thread to capture the q key 
+	// to stop the inifinite loop and quit the program.
 	std::thread io{ [&] {
 		std::string tmp;
 		while (true) {
@@ -296,18 +295,19 @@ int main(int argc, char *argv[])
 	}
 	catch (const boost::property_tree::xml_parser_error&)
 	{
-		std::cout << "Cannot parse XML file. Make sure it is well-formed XML.\n";
+		std::cout << "Cannot open or parse XML file. Make sure it is well-formed XML.\n";
 		exit(EXIT_FAILURE);
 	}
+	myx52.set_xmlfile(&xml_file);
 
 	if (myx52.construct_successful()) {
+		// Connect to MSFS
 		if (SUCCEEDED(SimConnect_Open(&hSimConnect, "x52 msfs out client", NULL, 0, 0, 0)))
 		{
 			printf("\nConnected to Flight Simulator!\n");
-
 			myx52.set_simconnect_handle(hSimConnect);
 
-			// BEGIN Request data under the master tag from MSFS
+			// BEGIN Request MSFS to send us all data mentioned in the master tag at Dispatch
 			std::string attr, dataref, unit;
 			size_t separatorpos;
 			for (boost::property_tree::ptree::value_type &v : xml_file.get_child("master")) { // Read all children of master tag
@@ -338,7 +338,7 @@ int main(int argc, char *argv[])
 				0, // origin: wait 0 frames before transmission starts
 				10 // interval: send data every 10 frames
 			);
-			// END OF Request data under the master tag from MSFS
+			// END Request MSFS to send us all data mentioned in the master tag at Dispatch
 
 			// BEGIN Request the absolute time for various timing purposes
 			hr = SimConnect_AddToDataDefinition(hSimConnect, DEF_ABSTIME, "ABSOLUTE TIME", "Seconds", SIMCONNECT_DATATYPE_FLOAT64);
@@ -354,6 +354,12 @@ int main(int argc, char *argv[])
 			// END Request the absolute time for various timing purposes
 
 			// BEGIN Request data for 32 joy buttons from MSFS
+			// X52 has 39 buttons but SimConnect only works with 32 buttons.
+			// Bug has already been logged by Microsoft.
+			// We map each joy button press and release SimEvent to a
+			// ClientEvent which we number starting from myx52.EVENT_JOYBUTTON_PRESS
+			// and myx52.EVENT_JOYBUTTON_RELEASE.
+			// The events are placed in Notification Group GROUP_JOYBUTTONS.
 			std::string joystickname;
 			for (int i = 0; i < 32; i++)
 			{
@@ -373,11 +379,13 @@ int main(int argc, char *argv[])
 			}
 			hr = SimConnect_SetNotificationGroupPriority(hSimConnect, GROUP_JOYBUTTONS, SIMCONNECT_GROUP_PRIORITY_HIGHEST);
 			hr = SimConnect_SetInputGroupState(hSimConnect, INPUT_JOYBUTTONS, SIMCONNECT_STATE_ON);
-			// BEGIN Request data for 32 joy buttons from MSFS
+			// END Request data for 32 joy buttons from MSFS
 
 			std::deque<std::string> toProcess;
-			while (constcharn.compare(0, 1, quit) == 0)
+			// The infinite MSFS processing loop
+			while (constcharn.compare(0, 1, quit) == 0) 
 			{
+				// BEGIN of setting the quit variable when CTRL+C press detected in the other thread
 				{
 					// critical section
 					std::unique_lock<std::mutex> lock{ mutex };
@@ -394,10 +402,13 @@ int main(int argc, char *argv[])
 					}
 					toProcess.clear();
 				}
+				// END of setting the quit variable when CTRL+C press detected in the other thread
 
 				std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
 				SimConnect_CallDispatch(hSimConnect, MyDispatchProcRD, NULL);
+				// After all dispatched events were processed,
+				// some further processing is done.
 				myx52.shift_state_action(xml_file);
 			}
 
@@ -420,5 +431,5 @@ int main(int argc, char *argv[])
 
 }
 
-// ELECTRICAL MASTER BATTERY  Bool  0 vagy 1
-// A szimul�tor ideje (�pp nappal vagy �jszaka van-e) (E:LOCAL TIME, seconds)  https://docs.flightsimulator.com/html/Programming_Tools/Programming_APIs.htm#EnvironmentVariables
+// ELECTRICAL MASTER BATTERY  Bool  0 or 1
+// Simulator time (to check if it is day or night) (E:LOCAL TIME, seconds)  https://docs.flightsimulator.com/html/Programming_Tools/Programming_APIs.htm#EnvironmentVariables

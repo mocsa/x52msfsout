@@ -20,29 +20,13 @@
 
 class X52
 {
-public:                 // begin the public section
-	X52();
-	~X52();
-	void logg(std::string status, std::string func, std::string msg);
-	void set_simconnect_handle(HANDLE handle);
-	void heartbeat();
-	void heartbeatReset();
-	void write_to_mfd(std::string line1, std::string line2, std::string line3);
-	void write_shift(std::string on);
-	void update_brightness(std::string id, std::string brightness);
-	void execute_button_press(boost::property_tree::ptree &xmltree, int btn);
-	void execute_button_release(boost::property_tree::ptree &xmltree, int btn);
-	bool assignment_button_action(boost::property_tree::ptree &xmltree, int btn, std::string status);
-	void all_on(std::string id, bool on);
-	bool shift_state_active(const boost::property_tree::ptree xmltree);
-	void shift_state_action(const boost::property_tree::ptree xml_file);
-	void start_command_handler();
-	bool construct_successful();
+// VARIABLES
+public:
 	std::ofstream m_cmd_file;
 	int MAX_MFD_LEN; // Max num of chars written to one MFD row
 	std::string MFD_ON_JOY[3]; // The currently displayed 3 lines of text on the MFD
 	double HEARTBEAT_TIME = 0; // Last time of communication with command handler
-	double X52_RUN_TIME; // Absolute time in the simulator. Variable name taken from x52luaout.
+	double X52_RUN_TIME; // Absolute time in the simulator, in seconds, with double precision (5 decimals). Variable name taken from x52luaout.
 	std::string CUR_SHIFT_STATE;
 	bool mfd_on, led_on;
 	bool joybuttonstates[32];
@@ -57,10 +41,32 @@ public:                 // begin the public section
 		EVENT_CLIENTID = 10000, // First Client Event ID to send a single command/InputEvent
 	};
 	int lastClientEventId = EVENT_CLIENTID - 1;
-protected:              // begin the protected section
+protected:
 	std::ofstream m_log_file;
 	struct SingleDataref {
 		double  dataref[1];
 	};
 	HANDLE  hSimConnect;
+	boost::property_tree::ptree* xml_file;
+// FUNCTIONS
+public:
+	X52();
+	~X52();
+	void logg(std::string status, std::string func, std::string msg);
+	void set_simconnect_handle(HANDLE handle);
+	void set_xmlfile(boost::property_tree::ptree* xml_file);
+	void heartbeat();
+	void heartbeatReset();
+	void write_to_mfd(std::string line1, std::string line2, std::string line3);
+	void write_shift(std::string on);
+	void update_brightness(std::string id, std::string brightness);
+	bool evaluate_xml_op(double simvarvalue, std::string op);
+	void execute_button_press(boost::property_tree::ptree &xmltree, int btn);
+	void execute_button_release(boost::property_tree::ptree &xmltree, int btn);
+	bool assignment_button_action(boost::property_tree::ptree &xmltree, int btn, std::string status);
+	void all_on(std::string id, bool on);
+	bool shift_state_active(const boost::property_tree::ptree xmltree);
+	void shift_state_action(const boost::property_tree::ptree xml_file);
+	void start_command_handler();
+	bool construct_successful();
 };

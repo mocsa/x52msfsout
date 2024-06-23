@@ -70,6 +70,4 @@ value_type.second is the ptree below this element, the children of this element 
 
 [Boost 1.46.1, Property Tree: How to iterate through ptree receiving sub ptrees?](https://stackoverflow.com/questions/6656380/boost-1-46-1-property-tree-how-to-iterate-through-ptree-receiving-sub-ptrees) says „With C++17 you can do it even more elegant with structured bindings: `for (const auto& [key, value] : children) { ... }`”
 
-[C++ Cheatsheets](https://www.codecademy.com/resources/cheatsheets/language/c-plus-plus)
-
 Older but a bit better doc of ptree: http://kaalus.atspace.com/ptree/doc/index.html
