@@ -16,11 +16,6 @@
 */
 
 #include "x52.h"
-#include <fstream>
-#include <iomanip>
-#include <source_location>
-
-#include "SimConnect.h"
 
 void X52::logg(std::string status, std::string func, std::string msg) {
 	std::time_t now_c = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -34,6 +29,14 @@ void X52::logg(std::string status, std::string func, std::string msg) {
 
 void X52::set_simconnect_handle(HANDLE handle) {
 	hSimConnect = handle;
+}
+
+void X52::set_wasimconnect_instance(WASimCommander::Client::WASimClient & client) {
+	wasimclient = &client;
+}
+
+void X52::set_x52HID(x52HID& instance) {
+	x52hid = &instance;
 }
 
 void X52::set_xmlfile(boost::property_tree::ptree* file) {
@@ -59,32 +62,115 @@ void X52::heartbeatReset() {
 
 void X52::write_to_mfd(std::string line1, std::string line2, std::string line3) {
 	if (MFD_ON_JOY[0] != line1) {
-		m_cmd_file << "mfd 1 \"" << line1 << "\"" << std::endl; // endl causes flush
-		heartbeatReset();
+		x52hid->setMFDTextLine(0, line1);
 	}
 	if (MFD_ON_JOY[1] != line2) {
-		m_cmd_file << "mfd 2 \"" << line2 << "\"" << std::endl; // endl causes flush
-		heartbeatReset();
+		x52hid->setMFDTextLine(1, line2);
 	}
 	if (MFD_ON_JOY[2] != line3) {
-		m_cmd_file << "mfd 3 \"" << line3 << "\"" << std::endl; // endl causes flush
-		heartbeatReset();
+		x52hid->setMFDTextLine(2, line3);
 	}
 	MFD_ON_JOY[0] = line1;
 	MFD_ON_JOY[1] = line2;
 	MFD_ON_JOY[2] = line3;
 }
 
-void X52::write_shift(std::string on) {
-    m_cmd_file << "shift " << on << std::endl;
-    heartbeatReset();
+void X52::write_led(std::string led, std::string color) {
+	if (CURRENT_LED_COLOR.empty())
+	{
+		// Initially all leds are off
+		CURRENT_LED_COLOR = {
+		{ "fire", "" },
+		{ "a", "" },
+		{ "b", "" },
+		{ "d", "" },
+		{ "e", "" },
+		{ "t1", "" },
+		{ "t2", "" },
+		{ "t3", "" },
+		{ "pov", "" },
+		{ "clutch", "" },
+		{ "throttle", "" }
+		};
+	}
+	if (CURRENT_LED_COLOR[led] != color) {
+		if (x52hid->setLedColor(led, color))
+		{
+			CURRENT_LED_COLOR[led] = color;
+	}
+}
 }
 
-void X52::update_brightness(std::string id, std::string brightness) {
-    m_cmd_file << "light " << id << " " << brightness << std::endl; // endl causes flush
-    heartbeatReset();
+void X52::update_led(std::string led, std::string light, std::string current_light, boost::property_tree::ptree &state, bool force) {
+	int mypos;
+	// Are there sequences defined in the XML file?
+	if (xml_file->count("sequences") != 0) {
+		for (boost::property_tree::ptree::value_type& v : xml_file->get_child("sequences"))
+		{
+			if (v.first == "sequence" && light == v.second.get<std::string>("<xmlattr>.name"))
+			{
+				// Found sequence tag with the name in the light variable
+				if (!state.empty())
+				{
+					// Count up time stamp with 1/speeds part of a second
+					if ( state.get<double>("<xmlattr>.timestamp",0.0) == 0.0 || // Is this the first time we encounter this sequence?
+						(X52_RUN_TIME - state.get<double>("<xmlattr>.timestamp",0.0)) > (1 / v.second.get<double>("<xmlattr>.speed")) ) // Is this the time to move to a next pos in the sequence?
+					{
+						// Time to move to next pos in sequence or first time.
+						if (v.second.get("<xmlattr>.loop","nil") == "nil")
+						{
+							v.second.put("<xmlattr>.loop", "0"); // Loop attribute in sequnce should default to 0 (repeat forever) if omitted
+						}
+						if (state.get("<xmlattr>.loop_count","nil") == "nil")
+						{
+							state.put("<xmlattr>.loop_count", 0); // First time
+						}
+						if (state.get("<xmlattr>.pos","nil") != "nil") // Position already has a value?
+						{
+							mypos = state.get<int>("<xmlattr>.pos");
+							mypos++;
+							state.put<int>("<xmlattr>.pos", mypos); // Move to next pos
+						}
+						else
+						{
+							state.put("<xmlattr>.pos", 1); // Start at first pos
+						}
+						// Have we went past the last position of the sequence?
+						if (state.get<int>("<xmlattr>.pos") > v.second.get<std::string>("<xmlattr>.pattern").length())
+						{
+							// End of pattern, move to first and increase loop-count
+							state.put("<xmlattr>.pos", 1);
+							state.put("<xmlattr>.loop_count", state.get<int>("<xmlattr>.loop_count") + 1);
+						}
+						// Are we looping forever or have we not exceeded maximum number of loops?
+						if (v.second.get<std::string>("<xmlattr>.loop") == "0" || state.get<int>("<xmlattr>.loop_count") < ( v.second.get<int>("<xmlattr>.loop") + 1 ) )
+						{
+							std::string b_light;
+							std::string pattern = v.second.get<std::string>("<xmlattr>.pattern").substr(state.get<int>("<xmlattr>.pos") - 1,1);
+							if (pattern == " ") b_light = "off";
+							else if (pattern == "a") b_light = "amber";
+							else if (pattern == "g") b_light = "green";
+							else if (pattern == "r") b_light = "red";
+							else if (pattern == "o") b_light = "on";
+							write_led(led, b_light);
+							if (state.get<double>("<xmlattr>.timestamp",0.0) == 0.0)
+							{
+								// If the states sequence has been non active, timestamp needs to be set for proper timing
+								state.put<double>("<xmlattr>.timestamp", X52_RUN_TIME);
+							}
+							else
+							{
+								state.put<double>("<xmlattr>.timestamp", state.get<double>("<xmlattr>.timestamp") + (1/v.second.get<double>("<xmlattr>.speed")));
+							}
+						}
+					}
+				}
+				return; // If matching sequence was found, no need to loop further
+			}
+		}
+	}
+	if (light != current_light || force) write_led(led, light);
 }
-
 
 bool X52::evaluate_xml_op(double simvarvalue, std::string op) {
 	std::string oper, value;
@@ -144,6 +230,16 @@ void X52::execute_button_press(boost::property_tree::ptree &xmltree, int btn) {
 					0, // ArrayCount: Number of elements in the data array. A count of zero is interpreted as one element.
 					sizeof(datarefstruct), // size of each element in the data array in bytes
 					&datarefstruct );
+			} else if (xmltree.get<std::string>("<xmlattr>.calculator_code", "") != "") {
+				std::string calc_code = xmltree.get<std::string>("<xmlattr>.calculator_code");
+				double fResult = 0.;
+				std::string sResult {};
+				if (wasimclient->executeCalculatorCode(calc_code, WASimCommander::Enums::CalcResultType::Double, &fResult, &sResult) == S_OK) {
+					std::cout << "Calculator code " << quoted(calc_code) << " returned: " << fResult << " and " << quoted(sResult) << std::endl;
+				}
+				else {
+					std::cout << "Calculator code " << quoted(calc_code) << " could not be executed. Returned: " << fResult << " and " << quoted(sResult) << std::endl;
+				}
 			}
 			xmltree.put("<xmlattr>.pressed","true");
 		}
@@ -156,10 +252,6 @@ void X52::execute_button_release(boost::property_tree::ptree& xmltree, int btn) 
 	xmltree.put("<xmlattr>.in_repeat","");
 }
 
-/// <summary>This method is called recursively to process elements under the assignments tag.</summary>
-/// <param name="xmltree">A Property Tree of 1. all button tags under the assignments tag OR 2. a button tag OR 3. a shifted_button tag under a button tag.</param>
-/// <param name="status">Contains the string pressed or released.</param>
-/// https://learn.microsoft.com/en-us/cpp/build/reference/summary-visual-cpp?view=msvc-170
 bool X52::assignment_button_action(boost::property_tree::ptree &xmltree, int btn, std::string status) {
 	try
 	{
@@ -205,25 +297,109 @@ bool X52::assignment_button_action(boost::property_tree::ptree &xmltree, int btn
 	}
 }
 
+
+std::string X52::dataref_ind_action(std::string tagname, boost::property_tree::ptree &xmltree, std::string led, std::string current_light, bool force) {
+	std::string r;
+	boost::property_tree::ptree empty_ptree;
+	try
+	{
+		for (boost::property_tree::ptree::value_type& v : xmltree)
+		{
+			if (v.first == "led") // a led tag which contains multiple state tags
+			{
+				if (v.second.count("state") != 0) // This led has a state declared
+				{
+					r = dataref_ind_action(v.first, v.second, v.second.get<std::string>("<xmlattr>.id"), v.second.get<std::string>("<xmlattr>.current_light",""), force);
+					if (r == "") { // No state evaluates to true, set led to off
+						update_led(v.second.get<std::string>("<xmlattr>.id"), "off", v.second.get<std::string>("<xmlattr>.current_light"), v.second, force);
+						v.second.put("<xmlattr>.current_light", "off");
+					} else {
+						v.second.put("<xmlattr>.current_light", r);
+					}
+				} else {
+					// No declared states for led, set to off
+					if (v.second.get("<xmlattr>.current_light", "") != "off") {
+						update_led(v.second.get<std::string>("<xmlattr>.id"), "off", "", empty_ptree, force);
+						v.second.put("<xmlattr>.current_light", "off");
+					}
+				}
+			} else if (v.first == "state") { // a state tag below a led tag or below another state tag
+				r = dataref_ind_action(v.first, v.second, led, current_light, force);
+				if (r != "") { // Higher prio state was set, so reset this state's sequence timing and abort
+					xmltree.put("<xmlattr>.pos", 0);
+					xmltree.put("<xmlattr>.loop_count", 0);
+					xmltree.put<double>("<xmlattr>.timestamp", 0.0);
+					return r;
+				}
+			}
+		}
+		// No subitems to loop into, we're at bottom (innermost state)
+		if (tagname == "state") {
+			if (xmltree.get<double>("<xmlattr>.timestamp", 0.0) == 0.0 || force) // Reset sequence timing if this is first time or when forced to update
+			{
+				xmltree.put("<xmlattr>.pos", 89);
+				xmltree.put("<xmlattr>.loop_count", 0);
+				xmltree.put<double>("<xmlattr>.timestamp", 0.0);
+			}
+			double fResult = 0.;
+			std::string attr, dataref, unit;
+			size_t separatorpos;
+			attr = xmltree.get<std::string>("<xmlattr>.dataref");
+			separatorpos = attr.find("%");
+			dataref = attr.substr(0, separatorpos);
+			unit = attr.substr(separatorpos + 1);
+			// TODO Separate index from dataref name
+			wasimclient->getVariable(WASimCommander::Client::VariableRequest(dataref, unit, 0), &fResult);
+			// Evaluates dataref with op from the xml file.
+			if (evaluate_xml_op(fResult, xmltree.get<std::string>("<xmlattr>.op"))) {
+				update_led(led, xmltree.get<std::string>("<xmlattr>.light"), current_light, xmltree, force);
+				return xmltree.get<std::string>("<xmlattr>.light");
+			} else {
+				// Dataref doesn't evaluate
+				xmltree.put("<xmlattr>.pos", 0);
+				xmltree.put("<xmlattr>.loop_count", 0);
+				xmltree.put<double>("<xmlattr>.timestamp", 0.0);
+				return "";
+			}
+		}
+	}
+	catch (const boost::property_tree::ptree_error&)
+	{
+		return "";
+	}
+	return "";
+}
+
 void X52::all_on(std::string id, bool on) {
 	if (on) { // On!
 		if (id == "led") {
-			// X52.dataref_ind_action(X52.IND, nil, nil, true) --Force update for all defined leds
+			dataref_ind_action("", xml_file->get_child("indicators"), "", "", true); // Force update for all defined leds
 		}
 		else
 		{
-			// X52.dataref_mfd_action(X52.ACTIVE_PAGE, true)   --Force update for active page
+			// X52.dataref_mfd_action(X52.ACTIVE_PAGE, true)   // Force update for active page
 		}
 	}
 	else
 	{ // Off!
 		if (id == "led") {
-			// do nothing
+			write_led("fire"    , "off");
+			write_led("a"       , "off");
+			write_led("b"       , "off");
+			write_led("d"       , "off");
+			write_led("e"       , "off");
+			write_led("t1"      , "off");
+			write_led("t2"      , "off");
+			write_led("t3"      , "off");
+			write_led("pov"     , "off");
+			write_led("clutch"  , "off");
+			write_led("throttle", "off");
 		}
 		else
 		{
-			std::string empty(MAX_MFD_LEN, ' ');
-			write_to_mfd(empty, empty, empty);
+			x52hid->clearMFDTextLine(0);
+			x52hid->clearMFDTextLine(1);
+			x52hid->clearMFDTextLine(2);
 		}
 	}
 }
@@ -232,16 +408,18 @@ bool X52::shift_state_active(const boost::property_tree::ptree xmltree) {
 	for (const boost::property_tree::ptree::value_type &v : xmltree) { // Read all children of shift_states tag
 		if (v.first == "shift_state") // only process shift_state tags
 		{
+			// If the button in this shift_state tag is pressed, check the nested shift_state tag.
 			if (joybuttonstates[std::stoi(v.second.get<std::string>("<xmlattr>.button"))-1]) {
 				if (!shift_state_active(v.second)) {
 					// nested shift button is not pressed, so this state is the current active
-					if (CUR_SHIFT_STATE != v.second.get<std::string>("<xmlattr>.name")) { // we have a new current shiftstate
+					// Is this newly found state different from the current one?
+					if (CUR_SHIFT_STATE != v.second.get<std::string>("<xmlattr>.name")) {
 						CUR_SHIFT_STATE = v.second.get<std::string>("<xmlattr>.name");
 						logg("INFO", "x52.cpp:" + std::to_string(__LINE__), "New shift state: " + CUR_SHIFT_STATE);
 						if(mfd_on) {
 							// X52.activate_page(X52.ACTIVE_PAGE)
 						}
-						write_shift("on");
+						x52hid->setShift("on");
 					}
 				}
 				return true;
@@ -256,7 +434,7 @@ void X52::shift_state_action(const boost::property_tree::ptree xml_file) {
 	{
 		if (!shift_state_active(xml_file.get_child("shift_states")) && !CUR_SHIFT_STATE.empty() )
 		{
-			write_shift("off");
+			x52hid->setShift("off");
 			CUR_SHIFT_STATE.clear();
 			logg("INFO", "x52.cpp:" + std::to_string(__LINE__), "Shift state was cleared.");
 			if (mfd_on) {

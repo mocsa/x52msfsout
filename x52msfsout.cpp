@@ -23,7 +23,7 @@
 
 #include <iostream>
 #include <fstream>
-#include <x52.cpp>
+#include <x52.h>
 #include <cstdlib>
 
 // https://fmt.dev/latest/index.html
@@ -33,6 +33,9 @@
 #include <windows.h>
 #include "SimConnect.h"
 
+#define WSMCMND_API_STATIC
+#include <client/WASimClient.h>
+
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/program_options.hpp>
@@ -41,7 +44,9 @@ std::string quit ("n");
 std::string constcharn ("n");
 HANDLE  hSimConnect = NULL;
 X52 myx52;
+x52HID x52hid;
 boost::property_tree::ptree xml_file; // Create empty property tree object
+WASimCommander::Client::WASimClient* wasimclient;
 
 const char* ExceptionList[] = {
     "SIMCONNECT_EXCEPTION_NONE",
@@ -157,36 +162,45 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 			if(pObjData->dwDefineCount > 2)
 			{
 				// Below code is taken from Lua function X52.master_action(tbl)
+				// Differences from the original Lua function: MSFS will only send us a message when the
+				// SimVars change, therefore we don't use the needs_update variable and don't store the
+				// last value of the SimVars in the XML.
+				// Also, the second if-else block was merged into the first bigger if-else block.
 				int targetnumber = 0;
+
 				for (boost::property_tree::ptree::value_type &v : xml_file.get_child("master")) { // Read all children of master tag
 					if (v.first == "target") // only process target tags
 					{
-						myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), fmt::format( "id={} Master switch={:.2f} Master brightness={:.2f}", v.second.get<std::string>("<xmlattr>.id").c_str(), pS->dataarray[targetnumber], pS->dataarray[targetnumber + 1]));
+						myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), fmt::format( "Master tag: Simvars changed. Target id={} switch simvar={:.2f} brightness simvar={:.2f}", v.second.get<std::string>("<xmlattr>.id").c_str(), pS->dataarray[targetnumber], pS->dataarray[targetnumber + 1]));
 						// Check if SimVar value equals operator in XML
 						if (myx52.evaluate_xml_op(pS->dataarray[targetnumber], v.second.get<std::string>("<xmlattr>.op"))) {
 							if (v.second.get<std::string>("<xmlattr>.on", "") != "true") {
+								// If this target is not already on, switch it on.
 								myx52.all_on(v.second.get<std::string>("<xmlattr>.id"), true);
+								// Store in the XML that this target is currently on
 								v.second.put<std::string>("<xmlattr>.on", "true");
+								// Store the target's status in the x52 class.
+								if (v.second.get<std::string>("<xmlattr>.id") == "mfd") myx52.mfd_on = true;
+								if (v.second.get<std::string>("<xmlattr>.id") == "led") myx52.led_on = true;
+
+								myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), fmt::format( "Master tag: Target id={}, setting brightness to {:.2f}", v.second.get<std::string>("<xmlattr>.id").c_str(), (pS->dataarray[targetnumber+1] - std::stod(v.second.get<std::string>("<xmlattr>.min"))) / (std::stod(v.second.get<std::string>("<xmlattr>.max")) - std::stod(v.second.get<std::string>("<xmlattr>.min"))) * 128 * std::stod(v.second.get<std::string>("<xmlattr>.default")) / 100));
+								x52hid.setBrightness(v.second.get<std::string>("<xmlattr>.id"), (pS->dataarray[targetnumber+1] - std::stod(v.second.get<std::string>("<xmlattr>.min"))) / (std::stod(v.second.get<std::string>("<xmlattr>.max")) - std::stod(v.second.get<std::string>("<xmlattr>.min"))) * 128 * std::stod(v.second.get<std::string>("<xmlattr>.default")) / 100 );
 							}
 						}
 						else
 						{
 							if (v.second.get<std::string>("<xmlattr>.on", "") != "false") {
+								// If this target is not already off, switch it off.
 								myx52.all_on(v.second.get<std::string>("<xmlattr>.id"), false);
-								myx52.update_brightness( v.second.get<std::string>("<xmlattr>.id"), "0");
+								// Set this target's brightness to 0.
+								myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), fmt::format( "Master tag: Target id={}, setting brightness to zero.", v.second.get<std::string>("<xmlattr>.id").c_str()));
+								x52hid.setBrightness( v.second.get<std::string>("<xmlattr>.id"), 0x0);
+								// Store in the XML that this target is currently off
 								v.second.put<std::string>("<xmlattr>.on", "false");
-							}
-						}
-
-						if (v.second.get<std::string>("<xmlattr>.on") == "true") {
-							if (v.second.get<std::string>("<xmlattr>.id") == "mfd") myx52.mfd_on = true;
-							if (v.second.get<std::string>("<xmlattr>.id") == "led") myx52.led_on = true;
-								myx52.update_brightness(v.second.get<std::string>("<xmlattr>.id"), std::to_string((pS->dataarray[targetnumber+1] - std::stod(v.second.get<std::string>("<xmlattr>.min"))) / (std::stod(v.second.get<std::string>("<xmlattr>.max")) - std::stod(v.second.get<std::string>("<xmlattr>.min"))) * 128 * std::stod(v.second.get<std::string>("<xmlattr>.default")) / 10000) );
-						}
-						else
-						{
-							if (v.second.get<std::string>("<xmlattr>.id") == "mfd") myx52.mfd_on = false;
+								// Store the target's status in the x52 class.
+								if (v.second.get<std::string>("<xmlattr>.id") == "mfd") myx52.mfd_on = false;
 							if (v.second.get<std::string>("<xmlattr>.id") == "led") myx52.led_on = false;
+							}
 						}
 						targetnumber = targetnumber + 2;
 					}
@@ -230,6 +244,21 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 	}
 }
 
+void handleTerminate() {
+    std::exception_ptr eptr = std::current_exception();
+    try {
+        if (eptr) {
+            std::rethrow_exception(eptr);
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Unhandled exception: " << e.what() << std::endl;
+    } catch (...) {
+        std::cerr << "Unhandled unknown exception." << std::endl;
+    }
+    std::abort();
+}
+
+
 int main(int argc, char *argv[])
 {
 	std::condition_variable cv;
@@ -237,8 +266,11 @@ int main(int argc, char *argv[])
 	std::deque<std::string> lines; // protected by m
 	std::string xmlconfig;
 	int joystick;
+	long mfddelayms = 0;
 
 	HRESULT hr;
+
+	std::set_terminate(handleTerminate);
 
 	// BEGIN Check command-line options
 	try
@@ -247,7 +279,8 @@ int main(int argc, char *argv[])
 		desc.add_options()
 			("help", "Display help message")
 			("xmlconfig", boost::program_options::value<std::string>(&xmlconfig)->required(), "XML configuration file")
-			("joystick", boost::program_options::value<int>(&joystick)->required(), "Joystick number in MSFS");
+			("joystick", boost::program_options::value<int>(&joystick)->required(), "Joystick number in MSFS")
+			("mfddelayms", boost::program_options::value<long>(&mfddelayms)->default_value(0), "Delay in ms after sending each character-pair to MFD. Defaults to 0ms.");
 		boost::program_options::variables_map vm;
 		boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
 		if (vm.count("help")) {
@@ -301,11 +334,47 @@ int main(int argc, char *argv[])
 	myx52.set_xmlfile(&xml_file);
 
 	if (myx52.construct_successful()) {
+		if (x52hid.initialize() == 1)
+		{
+			std::cout << "HID path found: " << x52hid.getHIDPath() << std::endl;
+			myx52.set_x52HID(x52hid);
+			if (mfddelayms != 0) {
+				x52hid.setMFDCharDelay(mfddelayms);
+			}
+		}
+		else
+		{
+			std::cout << "Cannot initialize HID communication. Is X52 Pro plugged in? Is the Saitek / Logitech driver installed?" << std::endl;
+			exit(EXIT_FAILURE);
+		}
+
 		// Connect to MSFS
 		if (SUCCEEDED(SimConnect_Open(&hSimConnect, "x52 msfs out client", NULL, 0, 0, 0)))
 		{
 			printf("\nConnected to Flight Simulator!\n");
 			myx52.set_simconnect_handle(hSimConnect);
+
+			// Connect to WASimCommander module within Simulator using default timeout period and network configuration (local Simulator)
+			WASimCommander::Client::WASimClient tempclient = WASimCommander::Client::WASimClient(0x52C11E47);  // "x52CLIENT"
+			wasimclient = &tempclient;
+			if ((hr = wasimclient->connectSimulator()) != S_OK) {
+				std::cout << "WASimClient cannot connect to Simulator, quitting. Error Code: " + hr;
+				exit(EXIT_FAILURE);
+			}
+			// Ping the WASimCommander server to make sure it's running and get the server version number (returns zero if no response).
+			const uint32_t wasimversion = wasimclient->pingServer();
+			if (wasimversion == 0) {
+				std::cout << "WASimClient server did not respond to ping, quitting.";
+				exit(EXIT_FAILURE);
+			}
+			// Decode version number to dotted format and print it
+			std::cout << "Found WASimModule Server v" << (wasimversion >> 24) << '.' << ((wasimversion >> 16) & 0xFF) << '.' << ((wasimversion >> 8) & 0xFF) << '.' << (wasimversion & 0xFF);
+			// Try to connect to the server, using default timeout value.
+			if ((hr = wasimclient->connectServer()) != S_OK) {
+				std::cout << "WASimClient Server connection failed, quitting. Error Code: " << hr;
+				exit(EXIT_FAILURE);
+			}
+			myx52.set_wasimconnect_instance(tempclient);
 
 			// BEGIN Request MSFS to send us all data mentioned in the master tag at Dispatch
 			std::string attr, dataref, unit;
@@ -314,19 +383,33 @@ int main(int argc, char *argv[])
 				if (v.first == "target") // only process target tags
 				{
 					// For each target, request the value of switch_dataref and brightness_dataref.
+					try
+					{
 					attr = v.second.get<std::string>("<xmlattr>.switch_dataref");
 					separatorpos = attr.find("%");
 					dataref = attr.substr(0, separatorpos);
 					unit = attr.substr(separatorpos + 1);
 					// We assume, switch_dataref is not empty, because it is a mandatory attribute.
 					hr = SimConnect_AddToDataDefinition(hSimConnect, DEF_MASTER, dataref.c_str(), unit.c_str() );
+					}
+					catch (const boost::property_tree::ptree_bad_path&)
+					{
+						std::cout << "switch_dataref attribute for the " << v.second.get<std::string>("<xmlattr>.id") << " target is missing from the XML configuration! This might cause errors later!" << std::endl;
+					}
 
+					try
+					{
 					attr = v.second.get<std::string>("<xmlattr>.brightness_dataref");
 					separatorpos = attr.find("%");
 					dataref = attr.substr(0, separatorpos);
 					unit = attr.substr(separatorpos + 1);
 					// We assume, brightness_dataref is not empty, because it is a mandatory attribute.
 					hr = SimConnect_AddToDataDefinition(hSimConnect, DEF_MASTER, dataref.c_str(), unit.c_str());
+					}
+					catch (const boost::property_tree::ptree_bad_path&)
+					{
+						std::cout << "brightness_dataref attribute for the " << v.second.get<std::string>("<xmlattr>.id") << " target is missing from the XML configuration! This might cause errors later!" << std::endl;
+					}
 				}
 			}
 			hr = SimConnect_RequestDataOnSimObject(hSimConnect,
@@ -336,7 +419,8 @@ int main(int argc, char *argv[])
 				SIMCONNECT_PERIOD_VISUAL_FRAME,
 				SIMCONNECT_DATA_REQUEST_FLAG_CHANGED, // Only send data when it has changed
 				0, // origin: wait 0 frames before transmission starts
-				10 // interval: send data every 10 frames
+				2, // interval: send data every 2 frames
+				0  // limit: 0 = send endlessly
 			);
 			// END Request MSFS to send us all data mentioned in the master tag at Dispatch
 
@@ -349,7 +433,8 @@ int main(int argc, char *argv[])
 				SIMCONNECT_PERIOD_VISUAL_FRAME,
 				0, // Flags: none
 				0, // origin: wait 0 frames before transmission starts
-				10 // interval: send data every 10 frames
+				2, // interval: send data every 2 frames
+				0  // limit: 0 = send endlessly
 			);
 			// END Request the absolute time for various timing purposes
 
@@ -381,11 +466,16 @@ int main(int argc, char *argv[])
 			hr = SimConnect_SetInputGroupState(hSimConnect, INPUT_JOYBUTTONS, SIMCONNECT_STATE_ON);
 			// END Request data for 32 joy buttons from MSFS
 
+			// Initialize LEDs and MFD. Switch off LEDs which were set to a color
+			// in Windows' "USB Game Controllers" window.
+			myx52.all_on("led", false);
+			myx52.all_on("mfd", false);
+
 			std::deque<std::string> toProcess;
 			// The infinite MSFS processing loop
-			while (constcharn.compare(0, 1, quit) == 0) 
+			while (constcharn.compare(0, 1, quit) == 0)
 			{
-				// BEGIN of setting the quit variable when CTRL+C press detected in the other thread
+				// BEGIN of setting the quit variable when q key press detected in the other thread
 				{
 					// critical section
 					std::unique_lock<std::mutex> lock{ mutex };
@@ -402,14 +492,17 @@ int main(int argc, char *argv[])
 					}
 					toProcess.clear();
 				}
-				// END of setting the quit variable when CTRL+C press detected in the other thread
-
-				std::this_thread::sleep_for(std::chrono::milliseconds(5));
+				// END of setting the quit variable when q key press detected in the other thread
 
 				SimConnect_CallDispatch(hSimConnect, MyDispatchProcRD, NULL);
 				// After all dispatched events were processed,
 				// some further processing is done.
 				myx52.shift_state_action(xml_file);
+				// Are leds on? They are on or off based on the master tag.
+				if (myx52.led_on)
+				{
+					myx52.dataref_ind_action("", xml_file.get_child("indicators"));
+				}
 			}
 
 			hr = SimConnect_Close(hSimConnect);
@@ -431,5 +524,4 @@ int main(int argc, char *argv[])
 
 }
 
-// ELECTRICAL MASTER BATTERY  Bool  0 or 1
 // Simulator time (to check if it is day or night) (E:LOCAL TIME, seconds)  https://docs.flightsimulator.com/html/Programming_Tools/Programming_APIs.htm#EnvironmentVariables

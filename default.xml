@@ -1,20 +1,34 @@
+<!--
+The master tag contains target tags which control the brightness of leds and mfd.
+All tags and attributes below are mandatory. Copy this example and change the attribute values as you like.
+Default is given in percentage 0-100.
+If default is not 100 then brightness will move between 0% and default percent.
+-->
   <master>
-    <target id="mfd" default="70" switch_dataref="ELECTRICAL MASTER BATTERY%Bool" op="==1" index="0" brightness_dataref="LIGHT GLARESHIELD:1%number" min="0" max="1">
+    <target id="mfd" default="100" switch_dataref="ELECTRICAL MASTER BATTERY%Bool" op="==1" brightness_dataref="LIGHT GLARESHIELD:1%number" min="0" max="100">
 	</target>
-    <target id="led" default="70" switch_dataref="ELECTRICAL MASTER BATTERY%Bool" op="==1" brightness_dataref="LIGHT PANEL POWER SETTING%Percent" min="0" max="1">
+    <target id="led" default="50" switch_dataref="ELECTRICAL MASTER BATTERY%Bool" op="==1" brightness_dataref="LIGHT GLARESHIELD:1%number" min="0" max="100">
 	</target>
   </master>
+<!--
+The shift_states tag defines that when certain combination of joystick buttons is pressed then it activates a "shift" state which has a name.
+Joystick buttons can have a certain function in "non-shift" mode and a different function in each shift state.
+These shift states can be referenced in shifted_button tags inside button tags.
+Button tags themselves can appear inside assignment, page, and row tags.
+-->
   <shift_states>
     <shift_state name="mode1" button="28">
       <shift_state name="mode1_shiftStick" button="6"></shift_state>
-    </shift_state>
-    <shift_state name="mode2" button="29">
-      <shift_state name="mode2_shiftStick" button="6"></shift_state>
     </shift_state>
     <shift_state name="mode3" button="30">
       <shift_state name="mode3_shiftStick" button="6"></shift_state>
     </shift_state>
   </shift_states>
+<!--
+The assignments tag contains button tags which define what will a joystick button do in MSFS. This is already possible to do in MSFS,
+but assignments have much more functionality, like executing calculator code or repeating a command.
+Assignments is a mandatory tag, so you should have at least <assignments></assignments> in your XML file.
+-->
   <assignments clear_all="false">
     <!-- Throttle wheel press resets the elevator trim to zero -->
     <!-- This sets the value of a SimVar (dataref) to a constant value. -->
@@ -25,8 +39,58 @@
     <!-- Elevator trim one step Nose up -->
     <!-- This triggers an Input (Key) Event (command). -->
     <button nr="18" command="ELEV_TRIM_UP" type="trigger_pos" >
+      <!-- Move elevator trim up a bigger step. This is done by adding 0.005 radians to the trim position using calculator code written in RPN notation. -->
+      <shifted_button shift_state="mode1_shiftStick" calculator_code="(A:ELEVATOR TRIM POSITION, Radians) 0.005 + (&gt;A:ELEVATOR TRIM POSITION, Radians)" ></shifted_button>
     </button>
     <!-- Elevator trim one step Nose down -->
     <!-- This triggers an Input (Key) Event (command). -->
-    <button nr="17" command="ELEV_TRIM_DN" type="trigger_pos" />
-</assignments>
+    <button nr="17" command="ELEV_TRIM_DN" type="trigger_pos" >
+      <!-- Move elevator trim down a bigger step. This is done by subtracting 0.005 radians from the trim position using calculator code written in RPN notation. -->
+      <shifted_button shift_state="mode1_shiftStick" calculator_code="(A:ELEVATOR TRIM POSITION, Radians) 0.005 - (&gt;A:ELEVATOR TRIM POSITION, Radians)" ></shifted_button>
+    </button>
+  </assignments>
+<!--
+The indicators tag contains led tags with nested state tags. They define what will a joystick led indicate when a value changes in MSFS.
+The dataref attribute of every state tag is evaluated and if true the led is set to the given light value (on or off, or a color, or a blinking sequence).
+Be aware that you cannot control the color of the led on the silver POV hat and the led next to the Mode wheel. You can only control their brightness via the <master> tag. If the <target id=led> is on then these two leds remain on. Unlike other leds, you cannot switch them off selectively.
+-->
+  <indicators>
+    <!--
+    SimVar FLAPS HANDLE PERCENT possible values
+    0.0122 = Flaps up - T1 led off
+    33.345 = Flaps 1 - T1 led green
+    66.672 = Flaps 2 - T1 led amber
+    99.672 = Flaps 3 - T1 led red
+    Innermost state is evaluated first. If that is true, other states are discarded. If false, the state above it will be evaluated.
+    -->
+    <led id="t1">
+      <state light="off" dataref="FLAPS HANDLE PERCENT%percent" op="--5">
+        <state light="green" dataref="FLAPS HANDLE PERCENT%percent" op="++30">
+          <state light="amber" dataref="FLAPS HANDLE PERCENT%percent" op="++60">
+            <state light="red" dataref="FLAPS HANDLE PERCENT%percent" op="++98">
+            </state>
+          </state>
+        </state>
+      </state>
+    </led>
+    <!--
+    SimVar BRAKE PARKING POSITION possible values
+    0 = Brake off - D led flashes amber 4 times then stops
+    100 = Brake applied - D led flashes red twice indefinitely
+    This is a test of a (flashing) sequence.
+    -->
+    <led id="d">
+      <state light="amber_four_times" dataref="BRAKE PARKING POSITION%percent" op="--5">
+        <state light="red_dbl_short" dataref="BRAKE PARKING POSITION%percent" op="++5"/>
+      </state>
+    </led>
+  </indicators>
+<!--
+The sequences tag contains sequence tags which define named blinking sequences.
+The "speed" means that one character in the "pattern" is equivalent to 1/speed seconds of time.
+Do not set "speed" higher than half of your fps in MSFS. This is the fastest "speed" x52msfsout can handle without delay.
+-->
+  <sequences>
+    <sequence name="red_dbl_short" pattern="r  r           " speed="12"></sequence>
+    <sequence name="amber_four_times" pattern="a " speed="2" loop="4"></sequence>
+  </sequences>

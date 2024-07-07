@@ -18,9 +18,18 @@
     <ClCompile Include="x52msfsout.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="x52.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="x52HID.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="x52.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="x52HID.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

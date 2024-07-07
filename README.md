@@ -16,6 +16,8 @@ Follow the install instructions of X52LuaOut for Windows (see PDF among the extr
 
 Download the latest x52msfsout Release from the right hand side of this page and copy the .exe file into `the folder where you extracted X52LuaOut.zip/x52LuaOut/internals` or `the folder of X-Plane.exe\Resources\plugins\FlyWithLua\Scripts\x52LuaOut\internals\`.
 
+Download [WASimModule-v1.2.0.0.zip](https://github.com/mpaperno/WASimCommander/releases/download/1.2.0.0/WASimModule-v1.2.0.0.zip), extract it and copy the `wasimcommander-module` folder to your MSFS [community folder](https://docs.flightsimulator.com/html/Introduction/#community). This module is needed to do special things in MSFS like executing calculator code. It is similar to FSUIPC, but it is free.
+
 # XML configuration files
 
 After installation, you have to prepare XML configuration file(s). They determine how your joystick will react to events in MSFS  (including shifted buttons and Mode 1-3). You can define your own MFD pages, LED states with custom blinking patterns, etc. The included `default.xml` file has example configurations for all tags which are currently supported.
@@ -33,12 +35,17 @@ In the included `default.xml` file you can find example configuration for all ta
 - [x] \<shift_states\> fully supported.
 
 - [ ] \<assignments\>, clear_all attribute not supported. Not all types of \<button\> tags are supported inside \<assignments\>:
-  - [x] \<button type="trigger_pos"\> fully supported. Can handle dataref (SimVar in MSFS), and command (inputevent in MSFS).
+  - [x] \<button type="trigger_pos"\> fully supported. Can handle dataref (SimVar in MSFS), command (inputevent in MSFS), and MSFS calculator code.
   - [x] \<shifted_button\> fully supported with dataref and command attributes.
   - [ ] \<button type="trigger_neg"\>
   - [ ] \<button type="hold"\>
   - [ ] \<button type="toggle"\>
   - [ ] \<button type="repeater"\>
+- [x] \<sequences\> fully supported.
+- [x] \<indicators\> fully supported.
+  - [x] \<led\> fully supported.
+    - [x] \<state\> fully supported, except index attribute not needed, because it is included in dataref name.
+- [ ] \<mfd\> support is planned.
 
 ## Differences between X-Plane datarefs and MSFS SimVars
 
@@ -64,6 +71,18 @@ You use SimVar names in the dataref attributes.
 You use InputEvents in command attributes. They command the plane to do something.
 
 To find available InputEvents for a given aircraft, enable Development mode in MSFS in Options → General Options → Developers. During a flight, from the top Devmode menu select Tools → Behaviors. At the top of the page select AIRCRAFTNAME_INTERIOR.XML (for example CESSNA152_INTERIOR.XML) from the dropdown. Then on the InputEvents tab you can drill down into several event groups. At the lowest level everything written in light blue are InputEvent names, like ELEV_TRIM_UP or ELEVATOR_TRIM_SET. Find the documentation of the Behaviors tool [on this page](https://docs.flightsimulator.com/html/Developer_Mode/Menus/Tools/Behaviors_Debug.htm).
+
+## What is calculator code?
+
+This is a very powerful new feature, specific to MSFS, only available in x52msfsout. Calculator codes are small "scripts" which can read, manipulate, modify simulator values. They are written in [RPN notation](https://docs.flightsimulator.com/html/Additional_Information/Reverse_Polish_Notation.htm). They are normally used in MSFS XML configuration files but with x52msfsout and the WASimCommander module you can use it with your X52 Pro.
+
+Currently you can use the `calculator_code` attribute in \<button\> tags.
+
+Make sure to replace > with \&gt; and < with \&lt; in calculator code.
+
+There is a page called [HubHop](https://hubhop.mobiflight.com/presets/) where you can find a lot of RPN example code for your calculator code scripts.
+
+Here is [another useful page](https://github.com/MobiFlight/MobiFlight-Connector/wiki/MSFS2020-RPN-Tips-and-Tricks) which has various RPN examples for different simulator situations.
 
 ## Joystick button numbers in MSFS
 
@@ -93,12 +112,15 @@ x52msfsout has command line options:
 - `xmlconfig` Mandatory! Tells the program which XML config file to use (you can have different files for different aircrafts). The XML files are not opened automatically based on the aircraft’s name like in X52LuaOut.
 - `joystick` is an integer number which is the ID of your X52 joystick in MSFS. MSFS does not provide a way to find out your joystick’s ID automatically. This number can change depending on how many peripherals you have connected. Start with 0 and then go up from there until your button presses are registered in `x52msfsout_log.txt`.
 
+# Contributing
+
+Since I’m not very experienced in Lua or C++, your help is much appreciated. The task is to rewrite the X52LuaOut script (written in Lua) into C++ using SimConnect and WASimCommander. The good news is the program’s skeleton is ready. You don’t have to start from scratch. The aim is to support X52LuaOut XML config files with minimal modifications.
 
 ## Development environment
 
 The project was created using Visual Studio 2022.
 
-To compile it yourself, you will need the SimConnect SDK, the [fmt lib](https://github.com/fmtlib/fmt/), and the Boost headers. If you need help setting up your dev environment, open an Issue and I can hopefully help.
+To compile it yourself, you will need the SimConnect SDK, the [fmt lib](https://github.com/fmtlib/fmt/), the [WASimCommander_SDK-v1.2.0.0](https://github.com/mpaperno/WASimCommander/) and the Boost headers. If you need help setting up your dev environment, open an Issue and I can hopefully help.
 
 ## Architecture
 
@@ -111,6 +133,7 @@ This program is a rewrite of only the X52LuaOut script for FlyWithLua. But X52Lu
 - Only 32 joystick buttons are supported instead of 39. Bug reported.
 - The MFD Shift indicator is constantly on.
 - At some exit statements the cmd_handler is not closed.
+- Future improvement: Execute calculator code „as either a data request or a registered event” as suggested [here](https://wasimcommander.max.paperno.us/class_w_a_sim_commander_1_1_client_1_1_w_a_sim_client.html#a289fcb4566f6f44714412e8e27bbd361).
 - Nice to have: MapClientEventToSimEvent does not allow re-use of Event IDs. Workaround already implemented. Bug reported.
 
 # Online presence
