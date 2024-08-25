@@ -33,6 +33,19 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
 
+    - name: Download MSFS SDK file
+      run: |
+        curl -L -o MSFS_SDK_Core_Installer_0.24.0.0.msi https://sdk.flightsimulator.com/files/installers/0.24.0/MSFS_SDK_Core_Installer_0.24.0.0.msi
+
+    - name: Install msi
+      run: |
+        $file = "MSFS_SDK_Core_Installer_0.24.0.0.msi" 
+        $log = "MSFS_SDK_install.log" 
+        $procMain = Start-Process "msiexec" "/i `"$file`" /qn /l*! `"$log`"" -NoNewWindow -PassThru
+        $procLog = Start-Process "powershell" "Get-Content -Path `"$log`" -Wait" -NoNewWindow -PassThru 
+        $procMain.WaitForExit() 
+        $procLog.Kill()
+
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
       # Add additional options to the MSBuild command line here (like platform or verbosity level).
