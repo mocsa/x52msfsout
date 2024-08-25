@@ -20,6 +20,8 @@ env:
   # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
   BUILD_CONFIGURATION: Release
 
+  MSFS_SDK: MSFS_SDK
+
 permissions:
   contents: read
 
@@ -35,16 +37,14 @@ jobs:
 
     - name: Download MSFS SDK file
       run: |
-        curl -L -o MSFS_SDK_Core_Installer_0.24.0.0.msi https://sdk.flightsimulator.com/files/installers/0.24.0/MSFS_SDK_Core_Installer_0.24.0.0.msi
+        curl -L -o MSFS_SDK_Core_Installer_0.24.3.0.msi https://sdk.flightsimulator.com/files/installers/0.24.3/MSFS_SDK_Core_Installer_0.24.3.0.msi
 
-    - name: Install msi
+    - name: Extract msi
       run: |
-        $file = "MSFS_SDK_Core_Installer_0.24.0.0.msi" 
-        $log = "MSFS_SDK_install.log" 
-        $procMain = Start-Process "msiexec" "/i `"$file`" /qn /l*! `"$log`"" -NoNewWindow -PassThru
-        $procLog = Start-Process "powershell" "Get-Content -Path `"$log`" -Wait" -NoNewWindow -PassThru 
-        $procMain.WaitForExit() 
-        $procLog.Kill()
+        $file = "MSFS_SDK_Core_Installer_0.24.3.0.msi"
+        $log = "install.log"
+        $procMain = Start-Process "msiexec" "/a `"$file`" /qb TARGETDIR=$pwd\MSFS_SDK" -NoNewWindow -PassThru
+        $procMain.WaitForExit()
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
