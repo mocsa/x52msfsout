@@ -1,0 +1,7 @@
+{
+  "dependencies": [
+    "fmt",
+    "boost-property-tree",
+    "boost-program-options"
+  ]
+}

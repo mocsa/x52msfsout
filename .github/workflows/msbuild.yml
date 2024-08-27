@@ -1,0 +1,125 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: MSBuild
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  # Path to the solution file relative to the root of the project.
+  SOLUTION_FILE_PATH: .
+
+  # Configuration type to build.
+  # You can convert this to a build matrix if you need coverage of multiple configuration types.
+  # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+  BUILD_CONFIGURATION: Release
+
+  MSFS_SDK: 'MSFS_SDK\MSFS SDK'
+  MSFS_SDK_PATH: 0.24.3
+  MSFS_SDK_VERSION: 0.24.3.0
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'  # Checkout vcpkg submodule
+
+    - name: Cache vcpkg
+      id: cache-vcpkg
+      uses: actions/cache@v4
+      with:
+        path: |
+          vcpkg/installed
+          vcpkg/downloads
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+        restore-keys: |
+          ${{ runner.os }}-vcpkg-
+
+    - name: Setup vcpkg
+      run: |
+        cd vcpkg
+        .\bootstrap-vcpkg.bat  # For Windows
+        .\vcpkg integrate install
+
+    - name: Install vcpkg dependencies
+      run: |
+        ./vcpkg/vcpkg install  # This will read from vcpkg.json
+
+# https://stackoverflow.com/questions/60491837/
+    - if: ${{ steps.cache-vcpkg.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v4
+      name: Cache vcpkg files if the vcpkg.json has changed
+      with:
+        path: |
+          vcpkg/installed
+          vcpkg/downloads
+        key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Cache MSFS SDK
+      id: cache-msfs-sdk
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.MSFS_SDK }}
+        key: msfs-sdk-${{ env.MSFS_SDK_VERSION }}
+
+    - if: ${{ steps.cache-msfs-sdk.outputs.cache-hit != 'true' }}
+      name: Download MSFS SDK file
+      run: |
+        curl -L -o MSFS_SDK_Core_Installer_$env:MSFS_SDK_VERSION.msi https://sdk.flightsimulator.com/files/installers/$env:MSFS_SDK_PATH/MSFS_SDK_Core_Installer_$env:MSFS_SDK_VERSION.msi
+#    - name: Print Folder Tree
+#      uses: jaywcjlove/github-action-folder-tree@main
+#      with:
+#        path: .
+#        depth: 3
+
+# Piping to Out-Null waits for completion
+# Current path = Workspace. See https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs#github-context
+    - if: ${{ steps.cache-msfs-sdk.outputs.cache-hit != 'true' }}
+      name: Extract MSFS SDK msi
+      run: |
+        msiexec /a MSFS_SDK_Core_Installer_$env:MSFS_SDK_VERSION.msi /qb TARGETDIR=$env:GITHUB_WORKSPACE\MSFS_SDK | Out-Null
+# https://stackoverflow.com/questions/70036493/
+#        $file = "MSFS_SDK_Core_Installer_0.24.3.0.msi"
+#        $log = "install.log"
+#        $procMain = Start-Process "msiexec" "/a `"$file`" /qb TARGETDIR=D:\a\x52msfsout\x52msfsout\MSFS_SDK" -NoNewWindow -PassThru
+#        $procMain.WaitForExit()
+
+#    - name: Print Folder Tree
+#      uses: jaywcjlove/github-action-folder-tree@main
+#      with:
+#        path: .
+#        depth: 5
+
+    - if: ${{ steps.cache-msfs-sdk.outputs.cache-hit != 'true' }}
+      name: Cache MSFS SDK if this version hasn't been cached before
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ env.MSFS_SDK }}
+        key: msfs-sdk-${{ env.MSFS_SDK_VERSION }}
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      # Add additional options to the MSBuild command line here (like platform or verbosity level).
+      # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
+      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:VcpkgRoot=.\vcpkg ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Archive built artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-folder-${{ github.sha }}
+        path: build
