@@ -32,10 +32,8 @@ class X52
 {
 // VARIABLES
 public:
-	std::ofstream m_cmd_file;
 	int MAX_MFD_LEN; // Max num of chars written to one MFD row
 	std::string MFD_ON_JOY[3]; // The currently displayed 3 lines of text on the MFD
-	double HEARTBEAT_TIME = 0; // Last time of communication with command handler
 	double X52_RUN_TIME; // Absolute time in the simulator, in seconds, with double precision (5 decimals). Variable name taken from x52luaout.
 	/// <summary>
 	/// Contains the name of the current active shift state as a string.
@@ -74,8 +72,6 @@ public:
 	void set_wasimconnect_instance(WASimCommander::Client::WASimClient& client);
 	void set_x52HID(x52HID&);
 	void set_xmlfile(boost::property_tree::ptree* xml_file);
-	void heartbeat();
-	void heartbeatReset();
 	void write_to_mfd(std::string line1, std::string line2, std::string line3);
 	/// <summary>
     /// Maintain the led's current color in the CURRENT_LED_COLOR map. Sets a led to a given color, if it is not already that color, according to CURRENT_LED_COLOR.
@@ -138,6 +134,5 @@ public:
 	/// </summary>
 	/// <param name="xml_file">Pointer to the whole XML configuration file.</param>
 	void shift_state_action(const boost::property_tree::ptree xml_file);
-	void start_command_handler();
 	bool construct_successful();
 };

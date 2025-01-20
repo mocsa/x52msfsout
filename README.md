@@ -10,13 +10,38 @@ X52LuaOut supports Windows, Linux, and Mac. This program currently only supports
 
 # Installation
 
-Download [X52LuaOut](https://forums.x-plane.org/index.php?%2Ffiles%2Ffile%2F35304-x52luaout-winmaclin) and extract it somewhere. If you have X-Plane and already installed X52LuaOut, you can reuse it, as well.
-
-Follow the install instructions of X52LuaOut for Windows (see PDF among the extracted files). Particularly, I think you will need to do the libusb installation. Please report your experience by creating an Issue at the top of this page. I would like to include your experience in this documentation.
-
-Download the latest x52msfsout Release from the right hand side of this page and copy the .exe file into `the folder where you extracted X52LuaOut.zip/x52LuaOut/internals` or `the folder of X-Plane.exe\Resources\plugins\FlyWithLua\Scripts\x52LuaOut\internals\`.
+Download the latest x52msfsout Release from the right hand side of this page.
 
 Download [WASimModule-v1.2.0.0.zip](https://github.com/mpaperno/WASimCommander/releases/download/1.2.0.0/WASimModule-v1.2.0.0.zip), extract it and copy the `wasimcommander-module` folder to your MSFS [community folder](https://docs.flightsimulator.com/html/Introduction/#community). This module is needed to do special things in MSFS like executing calculator code. It is similar to FSUIPC, but it is free.
+
+# Saitek / Logitech DirectOutput service (aka SaiDOutput)
+
+When you install the Saitek / Logitech X52 Pro driver, it installs a Service. This is responsible to send commands to the joystick when you use the "X52 Professional H.O.T.A.S." application. When x52msfsout starts, it stops this service otherwise access to some joystick parameters would be blocked by the Service.
+
+## Change the Service permissions
+
+Normally, x52msfsout could only stop the Service if you run it from an Administrative Prompt. To save you from having to open an Administrative Prompt every time, do the following. It is enough to do this once:
+
+- Open an Administrative Prompt.
+- Issue the command `sc.exe sdshow saidoutput`.
+- The output has two parts, the first part starts with D: and the second part with S:.
+- Copy the output of the command, and insert `(A;;RPWPCR;;;BU)` to the end of the first part, just before S:.
+- Issue the command `sc.exe sdset saidoutput XXX` where XXX is the appended output from the previous step. On my computer the full command is `sc.exe sdset saidoutput D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)(A;;RPWPCR;;;BU)S:(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)`.
+- The system should reply with the message `[SC] SetServiceObjectSecurity SUCCESS`.
+- You can close the Administrative Prompt.
+
+After this, you won't need to run x52msfsout from an Administrative Prompt.
+
+The meaning of `(A;;RPWPCR;;;BU)` is `A`: Allow, `RP`: Read Properties, `WP`: Write Properties, `CR`: Control Service (includes start/stop), `BU`: Built-in users.
+
+## Restoring the Service
+
+x52msfsout will only start sucessfully, if it could stop the DirectOutput service. When x52msfsout stops, it will try to restart the service, but this may fail, for example, if x52msfsout crashes and does not have a chance to restart the service. In this case do the following:
+
+- Open a Command Prompt.
+- Issue the command `sc.exe query saidoutput`.
+- If in the output you see `STATE: 1 STOPPED` then issue the command `sc.exe start saidoutput`.
+- If in the output you see `STATE: 4 RUNNING` then the service is running and no action is necessary.
 
 # XML configuration files
 
@@ -24,7 +49,7 @@ After installation, you have to prepare XML configuration file(s). They determin
 
 x52msfsout only validates whether your file is well-formed XML, but it does not check whether mandatory attributes are missing and things like that. So it is your responsibility to create the XML according to the X52LuaOut Manual, otherwise x52msfsout will likely not work or will crash.
 
-To create these files, your primary documentation is the X52LuaOut Manual (you downloaded it during installation). But x52msfsout introduced some changes which are described below.
+To create these files, your primary documentation is the X52LuaOut Manual (see link at the top of this README). But x52msfsout introduced some changes which are described below.
 
 ## X52LuaOut configuration file support
 
@@ -98,19 +123,19 @@ After you have completed the installation steps and you have an XML configuratio
 
 Plug in your X52 Pro.
 
-Open Windows „USB game controllers” panel then open X52 Professional H.O.T.A.S. properties. Special buttons, like the Mode wheel only work for me (both in X-Plane and MSFS) if I keep the properties open while x52msfsout is running. Please report in an Issue whether you need this or not. I’m not sure why I need it.
+Open Windows „USB game controllers” panel then open X52 Professional H.O.T.A.S. properties. The pinkie shift button and the Mode wheel only work for me (both in X-Plane and MSFS) if I keep the properties open while x52msfsout is running. Please report in an Issue whether you need this or not. I’m not sure why I need it.
 
 Start MSFS.
 
 Start your flight.
 
-Start x52msfsout.exe. This will start the command handler from X52LuaOut which handles the communication with the joystick. Make sure you start x52msfsout only now, after you have started your flight. Otherwise the program will not be able to detect the current position of your Mode wheel. However, if this happens you can still turn the wheel to a different mode to make the program start recognizing it. After that it will work fine.
-
-x52msfsout has command line options:
+Start a command prompt and change the directory to where x52msfsout.exe is. Start x52msfsout.exe and make sure you specify the required command line options:
 
 - `help` displays all possible options
-- `xmlconfig` Mandatory! Tells the program which XML config file to use (you can have different files for different aircrafts). The XML files are not opened automatically based on the aircraft’s name like in X52LuaOut.
-- `joystick` is an integer number which is the ID of your X52 joystick in MSFS. MSFS does not provide a way to find out your joystick’s ID automatically. This number can change depending on how many peripherals you have connected. Start with 0 and then go up from there until your button presses are registered in `x52msfsout_log.txt`.
+- `xmlconfig` Required! Tells the program which XML config file to use (you can have different files for different aircrafts). The XML files are not opened automatically based on the aircraft’s name like in X52LuaOut.
+- `joystick` Required! It is an integer number which is the ID of your X52 joystick in MSFS. MSFS does not provide a way to find out your joystick’s ID automatically. This number can change depending on how many peripherals you have connected. Start with 0 and then go up from there until your button presses are registered in `x52msfsout_log.txt`.
+
+Make sure you start your flight before x52msfsout.exe! Otherwise the program will not be able to detect the current position of your Mode wheel. However, if this happens you can still turn the wheel to a different mode to make the program start recognizing it. After that, it will work fine.
 
 # Contributing
 
@@ -120,23 +145,19 @@ Since I’m not very experienced in Lua or C++, your help is much appreciated. T
 
 The project was created using Visual Studio 2022.
 
-To compile it yourself, you will need the SimConnect SDK, the [fmt lib](https://github.com/fmtlib/fmt/), the [WASimCommander_SDK-v1.2.0.0](https://github.com/mpaperno/WASimCommander/) and the Boost headers. If you need help setting up your dev environment, open an Issue and I can hopefully help.
+To compile it yourself, [set up vcpkg](https://learn.microsoft.com/hu-hu/vcpkg/get_started/get-started-msbuild?pivots=shell-cmd) and install the MSFS SDK. If you need help setting up your dev environment, open an Issue and I can hopefully help.
 
-## Architecture
-
-This program is a rewrite of only the X52LuaOut script for FlyWithLua. But X52LuaOut has an other part, the command handler. x52msfsout simply reuses this part. Here is how everything connects together:
-
-![](Architecture.svg)
+This repository already includes the dependencies from [WASimCommander_SDK-v1.2.0.0](https://github.com/mpaperno/WASimCommander/).
 
 # Known bugs
 
 - Only 32 joystick buttons are supported instead of 39. Bug reported.
-- The MFD Shift indicator is constantly on.
-- At some exit statements the cmd_handler is not closed.
 - Future improvement: Execute calculator code „as either a data request or a registered event” as suggested [here](https://wasimcommander.max.paperno.us/class_w_a_sim_commander_1_1_client_1_1_w_a_sim_client.html#a289fcb4566f6f44714412e8e27bbd361).
 - Nice to have: MapClientEventToSimEvent does not allow re-use of Event IDs. Workaround already implemented. Bug reported.
 
-# Online presence
+# Online presence, support
+
+Main discussion thread on FlightSimulator forum: https://forums.flightsimulator.com/t/x52msfsout-an-app-to-control-leds-and-mfd-on-the-saitek-logitech-x52-pro-joystick/648249  You can post in this thread if you don't know how to create an Issue on GitHub.
 
 This program has been announced at https://forums.flightsimulator.com/t/controlling-leds-and-mfd-on-the-saitek-logitech-x52-pro-and-non-pro-joystick/223066
 

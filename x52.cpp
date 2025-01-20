@@ -43,23 +43,6 @@ void X52::set_xmlfile(boost::property_tree::ptree* file) {
 	xml_file = file;
 }
 
-void X52::heartbeat() {
-	if (X52_RUN_TIME - HEARTBEAT_TIME > 60) {
-		// Restart command handler as this script has been inactive for over a minute
-		start_command_handler();
-		logg("INFO", "x52.cpp:" + std::to_string(__LINE__), "Command handler will be restarted");
-	}
-	if (X52_RUN_TIME - HEARTBEAT_TIME > 30 ) {
-		// Send a heartbeat to the command handler so it doesn't stop
-		m_cmd_file << "heartbeat" << std::endl;
-		HEARTBEAT_TIME = X52_RUN_TIME;
-	}
-}
-
-void X52::heartbeatReset() {
-    HEARTBEAT_TIME = X52_RUN_TIME;
-}
-
 void X52::write_to_mfd(std::string line1, std::string line2, std::string line3) {
 	if (MFD_ON_JOY[0] != line1) {
 		x52hid->setMFDTextLine(0, line1);
@@ -448,17 +431,8 @@ void X52::shift_state_action(const boost::property_tree::ptree xml_file) {
 	}
 }
 
-void X52::start_command_handler() {
-	// Command handler file
-	m_cmd_file.open("cmds");
-	// Command handling script
-	logg("INFO", "x52.cpp:" + std::to_string(__LINE__), "Command handler started with: start \"X52LuaOut Command handler\" /min /low luajit.exe cmd_handler.lua cmds");
-	std::system("start \"X52LuaOut Command handler\" /min /low luajit.exe cmd_handler.lua cmds");
-}
-
 bool X52::construct_successful() {
-    if (m_cmd_file.is_open() &&
-		m_log_file.is_open()) {
+    if (m_log_file.is_open()) {
         return true;
     }
     return false;
@@ -467,7 +441,6 @@ bool X52::construct_successful() {
 X52::X52() {
 	// Open log file
 	m_log_file.open("x52msfsout_log.txt");
-	start_command_handler();
 // Detect OS: https://stackoverflow.com/questions/5919996/
 #if defined(__linux__) || defined(__APPLE__)
     MAX_MFD_LEN = 16;
@@ -478,6 +451,5 @@ X52::X52() {
 }
 
 X52::~X52() {
-    m_cmd_file.close();
 	m_log_file.close();
 }

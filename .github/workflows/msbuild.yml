@@ -43,6 +43,8 @@ jobs:
         path: |
           vcpkg/installed
           vcpkg/downloads
+          vcpkg/packages
+          vcpkg/buildtrees
         key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json') }}
         restore-keys: |
           ${{ runner.os }}-vcpkg-

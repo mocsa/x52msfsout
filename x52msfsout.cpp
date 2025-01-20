@@ -182,10 +182,10 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 								// Store the target's status in the x52 class.
 								if (v.second.get<std::string>("<xmlattr>.id") == "mfd") myx52.mfd_on = true;
 								if (v.second.get<std::string>("<xmlattr>.id") == "led") myx52.led_on = true;
-
-								myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), fmt::format( "Master tag: Target id={}, setting brightness to {:.2f}", v.second.get<std::string>("<xmlattr>.id").c_str(), (pS->dataarray[targetnumber+1] - std::stod(v.second.get<std::string>("<xmlattr>.min"))) / (std::stod(v.second.get<std::string>("<xmlattr>.max")) - std::stod(v.second.get<std::string>("<xmlattr>.min"))) * 128 * std::stod(v.second.get<std::string>("<xmlattr>.default")) / 100));
-								x52hid.setBrightness(v.second.get<std::string>("<xmlattr>.id"), (pS->dataarray[targetnumber+1] - std::stod(v.second.get<std::string>("<xmlattr>.min"))) / (std::stod(v.second.get<std::string>("<xmlattr>.max")) - std::stod(v.second.get<std::string>("<xmlattr>.min"))) * 128 * std::stod(v.second.get<std::string>("<xmlattr>.default")) / 100 );
 							}
+
+							myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), fmt::format( "Master tag: Target id={}, setting brightness to {:.2f}", v.second.get<std::string>("<xmlattr>.id").c_str(), (pS->dataarray[targetnumber+1] - std::stod(v.second.get<std::string>("<xmlattr>.min"))) / (std::stod(v.second.get<std::string>("<xmlattr>.max")) - std::stod(v.second.get<std::string>("<xmlattr>.min"))) * 128 * std::stod(v.second.get<std::string>("<xmlattr>.default")) / 100));
+							x52hid.setBrightness(v.second.get<std::string>("<xmlattr>.id"), (pS->dataarray[targetnumber+1] - std::stod(v.second.get<std::string>("<xmlattr>.min"))) / (std::stod(v.second.get<std::string>("<xmlattr>.max")) - std::stod(v.second.get<std::string>("<xmlattr>.min"))) * 128 * std::stod(v.second.get<std::string>("<xmlattr>.default")) / 100 );
 						}
 						else
 						{
@@ -212,10 +212,6 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 		{
 			StructData* pS = (StructData*)&pObjData->dwData;
 			myx52.X52_RUN_TIME = pS->dataarray[0];
-			if (myx52.HEARTBEAT_TIME == 0) {
-				myx52.HEARTBEAT_TIME = myx52.X52_RUN_TIME;
-			}
-			myx52.heartbeat();
 			break;
 		}
 
@@ -300,6 +296,75 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 	// END Check command-line options
+
+	// Example code: https://learn.microsoft.com/en-us/windows/win32/services/svccontrol-cpp
+	// https://stackoverflow.com/questions/7808085/
+	SC_HANDLE hSCManager = NULL;
+	hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
+	if(hSCManager == NULL)
+    {
+        std::cerr << "Cannot open Windows Service manager." << "\n";
+        exit(EXIT_FAILURE);
+    }
+	SC_HANDLE hService = OpenService(hSCManager, "SaiDOutput", SERVICE_STOP | SERVICE_START | SERVICE_QUERY_STATUS);
+    if (!hService) {
+        std::cerr << "Cannot open Logitech DirectOutput service. " << "\n";
+
+		LPSTR messageBuffer = nullptr;
+
+        // Use FormatMessage to convert the error code into a readable message
+        size_t size = FormatMessageA(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+
+        // Copy the message into a std::string
+        std::string message(messageBuffer, size);
+
+        // Free the buffer allocated by FormatMessage
+        LocalFree(messageBuffer);
+		std::cerr << message;
+
+        exit(EXIT_FAILURE);
+    }
+	SERVICE_STATUS_PROCESS ssp;
+    DWORD cbBytesNeeded;
+    if(!QueryServiceStatusEx(hService, SC_STATUS_PROCESS_INFO, (LPBYTE) &ssp, sizeof ssp, &cbBytesNeeded))
+	{ 
+		printf("QueryServiceStatusEx failed (%d)\n", GetLastError());
+
+				LPSTR messageBuffer = nullptr;
+
+        // Use FormatMessage to convert the error code into a readable message
+        size_t size = FormatMessageA(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+
+        // Copy the message into a std::string
+        std::string message(messageBuffer, size);
+
+        // Free the buffer allocated by FormatMessage
+        LocalFree(messageBuffer);
+		std::cerr << message;
+        //CloseServiceHandle(schService); 
+        //CloseServiceHandle(schSCManager);
+        exit(EXIT_FAILURE);
+	}
+	BOOL bRet;
+    if (ssp.dwCurrentState != SERVICE_STOPPED) {
+		std::cout << "Logitech DirectOutput service is running. Trying to stop. (Current status " << ssp.dwCurrentState << ")\n";
+        bRet = ControlService(hService, SERVICE_CONTROL_STOP, (LPSERVICE_STATUS) &ssp);
+        //assert(bRet);
+		int stopTries = 0;
+        while (ssp.dwCurrentState != SERVICE_STOPPED) {
+            Sleep(ssp.dwWaitHint);
+            QueryServiceStatusEx(hService, SC_STATUS_PROCESS_INFO, (LPBYTE) &ssp, sizeof ssp, &cbBytesNeeded);
+			if (stopTries++ == 4)
+			{
+				std::cout << "Logitech DirectOutput service took too long to stop.\n";
+				exit(EXIT_FAILURE);
+			}
+        }
+    }
 
 	// Thread to read from stdin
 	// Code was taken from https://gist.github.com/vmrob/ff20420a20c59b5a98a1
@@ -506,11 +571,6 @@ int main(int argc, char *argv[])
 			}
 
 			hr = SimConnect_Close(hSimConnect);
-
-			// Close Command Handler
-			myx52.m_cmd_file << "exit" << std::endl; // endl causes flush
-
-			exit(EXIT_SUCCESS);
 		}
 		else {
 			printf("\nCannot connect to Flight Simulator!");
@@ -519,9 +579,14 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		std::cout << "Cannot create X52 object. Can cmds file be opened?\n";
+		std::cout << "Cannot create X52 object.\n";
 	}
-
+	
+	std::cout << "Starting Logitech DirectOutput service.\n";
+	bRet = StartService(hService, 0, NULL);
+	assert(bRet);
+	CloseServiceHandle(hService);
+    CloseServiceHandle(hSCManager);
 }
 
 // Simulator time (to check if it is day or night) (E:LOCAL TIME, seconds)  https://docs.flightsimulator.com/html/Programming_Tools/Programming_APIs.htm#EnvironmentVariables

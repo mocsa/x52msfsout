@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 - 2025-01-20
+
+### Added
+
+- Use vcpkg for dependency management
+- Build the project with a workflow on GitHub
+- Added default_invalid.xml to use during testing
+
+### Removed
+
+- No longer depend on an existing installation of X52LuaOut. The cmd_handler of X52LuaOut is no longer used.
+
 ## 0.2.0 - 2024-07-07
 
 ### Changed
