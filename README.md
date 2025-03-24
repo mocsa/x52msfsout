@@ -1,3 +1,5 @@
+[![MSBuild](https://github.com/mocsa/x52msfsout/actions/workflows/msbuild.yml/badge.svg)](https://github.com/mocsa/x52msfsout/actions/workflows/msbuild.yml)
+
 This program tries to replicate the functionality of [X52LuaOut](https://forums.x-plane.org/index.php?%2Ffiles%2Ffile%2F35304-x52luaout-winmaclin) with Microsoft Flight Simulator 2020. If you are proficient in Lua or C++, feel free to help out and send PRs. I’m not experienced in any of them, nor have much time, so my progress is slow.
 
 The program can re-use the XML configuration files from X52LuaOut, but you have to replace the name of the datarefs with their MSFS equivalents called SimVars. See `default.xml` included with x52msfsout for examples.
@@ -69,7 +71,7 @@ In the included `default.xml` file you can find example configuration for all ta
 - [x] \<sequences\> fully supported.
 - [x] \<indicators\> fully supported.
   - [x] \<led\> fully supported.
-    - [x] \<state\> fully supported, except index attribute not needed, because it is included in dataref name.
+    - [x] \<state\> fully supported. Also supports a new "delta" attribute, which determines the minimum change after which MSFS notifies us. Useful for values which constantly fluctuate, such as RPM.
 - [ ] \<mfd\> support is planned.
 
 ## Differences between X-Plane datarefs and MSFS SimVars
@@ -111,8 +113,6 @@ Here is [another useful page](https://github.com/MobiFlight/MobiFlight-Connector
 
 ## Joystick button numbers in MSFS
 
-X52 Pro has 39 buttons. MSFS recognizes all buttons but SimConnect gives an error for buttons above 32. This bug has been reported [on the developer forum](https://devsupport.flightsimulator.com/t/7708). So currently you cannot use buttons above 32 in x52msfsout.
-
 When specifying the button numbers for the \<button\> tag and elsewhere, use the same button number that you see in MSFS Control Options.
 
 Find an easy to understand overview of different buttons [on this page](./X52 Pro Buttons Overview/X52 Pro Buttons Overview.md)
@@ -123,8 +123,6 @@ After you have completed the installation steps and you have an XML configuratio
 
 Plug in your X52 Pro.
 
-Open Windows „USB game controllers” panel then open X52 Professional H.O.T.A.S. properties. The pinkie shift button and the Mode wheel only work for me (both in X-Plane and MSFS) if I keep the properties open while x52msfsout is running. Please report in an Issue whether you need this or not. I’m not sure why I need it.
-
 Start MSFS.
 
 Start your flight.
@@ -133,9 +131,6 @@ Start a command prompt and change the directory to where x52msfsout.exe is. Star
 
 - `help` displays all possible options
 - `xmlconfig` Required! Tells the program which XML config file to use (you can have different files for different aircrafts). The XML files are not opened automatically based on the aircraft’s name like in X52LuaOut.
-- `joystick` Required! It is an integer number which is the ID of your X52 joystick in MSFS. MSFS does not provide a way to find out your joystick’s ID automatically. This number can change depending on how many peripherals you have connected. Start with 0 and then go up from there until your button presses are registered in `x52msfsout_log.txt`.
-
-Make sure you start your flight before x52msfsout.exe! Otherwise the program will not be able to detect the current position of your Mode wheel. However, if this happens you can still turn the wheel to a different mode to make the program start recognizing it. After that, it will work fine.
 
 # Contributing
 
@@ -149,9 +144,18 @@ To compile it yourself, [set up vcpkg](https://learn.microsoft.com/hu-hu/vcpkg/g
 
 This repository already includes the dependencies from [WASimCommander_SDK-v1.2.0.0](https://github.com/mpaperno/WASimCommander/).
 
+# Architecture
+
+The following diagram shows how different parts of x52msfsout connect together.
+
+![](Architecture.svg)
+
+# Flowchart
+
+![](Flowchart.svg)
+
 # Known bugs
 
-- Only 32 joystick buttons are supported instead of 39. Bug reported.
 - Future improvement: Execute calculator code „as either a data request or a registered event” as suggested [here](https://wasimcommander.max.paperno.us/class_w_a_sim_commander_1_1_client_1_1_w_a_sim_client.html#a289fcb4566f6f44714412e8e27bbd361).
 - Nice to have: MapClientEventToSimEvent does not allow re-use of Event IDs. Workaround already implemented. Bug reported.
 

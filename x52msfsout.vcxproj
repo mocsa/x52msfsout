@@ -57,6 +57,12 @@
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+    <VcpkgUseMD>true</VcpkgUseMD>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+    <VcpkgUseMD>true</VcpkgUseMD>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -72,7 +78,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>libs\WASimCommander_SDK-v1.2.0.0\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>WASimClient_d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>WASimClient_d.lib;hid.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -93,15 +99,17 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <AdditionalLibraryDirectories>libs\WASimCommander_SDK-v1.2.0.0\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>WASimClient.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>WASimClient.lib;hid.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="LedBlinker.cpp" />
     <ClCompile Include="x52.cpp" />
     <ClCompile Include="x52HID.cpp" />
     <ClCompile Include="x52msfsout.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="LedBlinker.h" />
     <ClInclude Include="x52.h" />
     <ClInclude Include="x52HID.h" />
   </ItemGroup>

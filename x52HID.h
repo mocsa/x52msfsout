@@ -4,6 +4,8 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <array>
+#include <mutex>
 #include <Windows.h>
 
 /// <summary>The x52HID class allows two-way communication with a Saitek / Logitech X52Pro joystick using the factory drivers</summary>
@@ -16,7 +18,6 @@ public:
         X52_BRIGHTNESS_LED
     };
 public:
-	x52HID();
 	~x52HID();
     /// <summary>
     /// Tries to find the HID path for the first connected X52 Pro. Further X52 Pros are ignored.
@@ -24,6 +25,7 @@ public:
     /// <returns>int 1 means that a HID path was found</returns>
     int initialize();
     CHAR* getHIDPath();
+    HANDLE getHIDHandle();
     void setMFDCharDelay(long delay);
     /// <summary>
     /// Set the MFD or LED brightness.
@@ -63,8 +65,7 @@ private:
     CHAR* hidPath;
     HANDLE hidHandle;
     HANDLE hidCreateFileHandle;
-    unsigned char hidOutData[4];
-    DWORD hidOutBytesReturned;
+    std::mutex deviceIoControlMutex;
     const char X52PRO_VID_PID[18] = "VID_06A3&PID_0762";
     /// <summary>
     /// Delay in ms after sending each character to MFD. Defaults to 0ms.

@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2023  Csaba K Moln·r
+    Copyright (C) 2023  Csaba K Moln√°r
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,10 +17,6 @@
 
 #include "x52HID.h"
 
-x52HID::x52HID()
-{
-}
-
 x52HID::~x52HID()
 {
     CloseHandle(hidCreateFileHandle);
@@ -30,7 +26,7 @@ int x52HID::initialize()
 {
     // Get Number Of Devices
     UINT nDevices = 0;
-    GetRawInputDeviceList(NULL, &nDevices, sizeof(RAWINPUTDEVICELIST));
+    GetRawInputDeviceList(nullptr, &nDevices, sizeof(RAWINPUTDEVICELIST));
 
     // Got Any?
     if (nDevices < 1)
@@ -45,7 +41,7 @@ int x52HID::initialize()
     pRawInputDeviceList = new RAWINPUTDEVICELIST[sizeof(RAWINPUTDEVICELIST) * nDevices];
 
     // Got Memory?
-    if (pRawInputDeviceList == NULL)
+    if (pRawInputDeviceList == nullptr)
     {
         // Error
         std::cout << "ERROR: Could not allocate memory for RAWINPUT Device List." << std::endl;
@@ -74,8 +70,8 @@ int x52HID::initialize()
         UINT nBufferSize = 0;
         nResult = GetRawInputDeviceInfo(pRawInputDeviceList[i].hDevice, // Device
             RIDI_DEVICENAME,                // Get Device Name
-            NULL,                           // NO Buff, Want Count!
-            &nBufferSize);                 // Char Count Here!
+            nullptr,                        // NO Buff, Want Count!
+            &nBufferSize);                  // Char Count Here!
 
         // Got Device Name?
         if (nResult < 0)
@@ -91,7 +87,7 @@ int x52HID::initialize()
         CHAR *wcDeviceName = new CHAR[nBufferSize + 1];
 
         // Got Memory
-        if (wcDeviceName == NULL)
+        if (wcDeviceName == nullptr)
         {
             // Error
             std::cout << "ERROR: Unable to allocate memory for HID Device Name.. Moving to next device." << std::endl;
@@ -104,9 +100,9 @@ int x52HID::initialize()
         nResult = GetRawInputDeviceInfo(pRawInputDeviceList[i].hDevice, // Device
             RIDI_DEVICENAME,                // Get Device Name
             wcDeviceName,                   // Get Name!
-            &nBufferSize);                 // Char Count
+            &nBufferSize);                  // Char Count
 
-                                           // Got Device Name?
+        // Got Device Name?
         if (nResult < 0)
         {
             // Error
@@ -143,15 +139,16 @@ int x52HID::initialize()
         if (strstr(wcDeviceName, X52PRO_VID_PID)) {
             hidPath = wcDeviceName; // Store the HID path
             hidHandle = pRawInputDeviceList[i].hDevice; // Store the HID Handle
+            printf("hidHandle = %p\n", hidHandle);
 
             hidCreateFileHandle = CreateFile(
                 hidPath,
                 GENERIC_WRITE | GENERIC_READ,
                 FILE_SHARE_WRITE | FILE_SHARE_READ,
-                NULL,
+                nullptr,
                 OPEN_EXISTING,
                 0,
-                NULL);
+                nullptr);
 
             return 1;
         }
@@ -163,6 +160,10 @@ CHAR* x52HID::getHIDPath() {
     return hidPath;
 }
 
+HANDLE x52HID::getHIDHandle() {
+    return hidHandle;
+}
+
 void x52HID::setMFDCharDelay(long delay)
 {
     mfddelayms = delay;
@@ -170,6 +171,9 @@ void x52HID::setMFDCharDelay(long delay)
 
 void x52HID::setBrightness(std::string target, unsigned char brightnessValue)
 {
+    std::array<unsigned char, 4> hidOutData{}; // {} initializes all elements to zero
+    DWORD hidOutBytesReturned;
+
     if (brightnessValue > 128)
         brightnessValue = 128;
     if (target == "mfd")
@@ -184,15 +188,16 @@ void x52HID::setBrightness(std::string target, unsigned char brightnessValue)
     hidOutData[2] = 0;
     hidOutData[3] = brightnessValue;
 
+    std::lock_guard lock(deviceIoControlMutex);  // Lock to prevent simultaneous calls from different threads
     BOOL result = DeviceIoControl(
         hidCreateFileHandle,
         0x223008, // dwIoControlCode, Probably a proprietary Logitech constant
-        &hidOutData,
-        sizeof(hidOutData),
-        NULL,
+        hidOutData.data(),
+        static_cast<DWORD>(hidOutData.size()),
+        nullptr,
         0,
         &hidOutBytesReturned,
-        NULL);
+        nullptr);  // lpOverlapped, NULL means synchronous (blocking) I/O
 
     if (!result) {
         std::cout << "Error Sending Brightness value to joystick." << std::endl;
@@ -201,8 +206,10 @@ void x52HID::setBrightness(std::string target, unsigned char brightnessValue)
 
 bool x52HID::setLedColor(std::string targetLed, std::string color)
 {
+    std::array<unsigned char, 4> hidOutData{}; // {} initializes all elements to zero
+    DWORD hidOutBytesReturned;
     bool success = true;
-    std::map<std::string, std::vector<int>> LED_IDS {
+    std::map<std::string, std::vector<unsigned char>> LED_IDS {
         { "fire"     , { 1} }, // Fire button illumination on/off (color is controlled by the position of the safety cover)
         { "a"        , { 2, 3} }, // red component, green component
         { "b"        , { 4, 5} },
@@ -216,7 +223,7 @@ bool x52HID::setLedColor(std::string targetLed, std::string color)
         { "throttle" , {20} } // Throttle axis illumination on/off (color is controlled by the throttle position)
     };
 
-    std::map<std::string, std::vector<int>> LED_STATES{
+    std::map<std::string, std::vector<unsigned char>> LED_STATES{
         { "on"    , {1} },
         { "off"   , {0, 0} },
         { "red"   , {1, 0} },
@@ -225,7 +232,8 @@ bool x52HID::setLedColor(std::string targetLed, std::string color)
     };
 
     int i = 0;
-    for (int ledID : LED_IDS[targetLed])
+    std::lock_guard lock(deviceIoControlMutex);  // Lock to prevent simultaneous calls from different threads
+    for (unsigned char ledID : LED_IDS[targetLed])
     {
         try
         {
@@ -237,12 +245,12 @@ bool x52HID::setLedColor(std::string targetLed, std::string color)
             BOOL result = DeviceIoControl(
                 hidCreateFileHandle,
                 0x223008, // dwIoControlCode, Probably a proprietary Logitech constant
-                &hidOutData,
-                sizeof(hidOutData),
-                NULL,
+                hidOutData.data(),
+                static_cast<DWORD>(hidOutData.size()),
+                nullptr,
                 0,
                 &hidOutBytesReturned,
-                NULL);
+                nullptr);  // lpOverlapped, NULL means synchronous (blocking) I/O
 
             if (!result) {
                 std::cout << "Error Sending Led value to joystick." << std::endl;
@@ -261,20 +269,23 @@ bool x52HID::setLedColor(std::string targetLed, std::string color)
 
 void x52HID::setShift(std::string shiftState)
 {
+    DWORD hidOutBytesReturned;
+    std::array<unsigned char, 4> hidOutData{}; // {} initializes all elements to zero
     hidOutData[0] = 0xFD;
     hidOutData[1] = 0;
     hidOutData[2] = 0;
     hidOutData[3] = shiftState == "on" ? 0x51 : 0x50;
 
+    std::lock_guard lock(deviceIoControlMutex);  // Lock to prevent simultaneous calls from different threads
     BOOL result = DeviceIoControl(
         hidCreateFileHandle,
         0x223008, // dwIoControlCode, Probably a proprietary Logitech constant
-        &hidOutData,
-        sizeof(hidOutData),
-        NULL,
+        hidOutData.data(),
+        static_cast<DWORD>(hidOutData.size()),
+        nullptr,
         0,
         &hidOutBytesReturned,
-        NULL);
+        nullptr);  // lpOverlapped, NULL means synchronous (blocking) I/O
 
     if (!result) {
         std::cout << "Error Sending Shift state to joystick." << std::endl;
@@ -284,7 +295,9 @@ void x52HID::setShift(std::string shiftState)
 
 void x52HID::clearMFDTextLine(int line)
 {
-    unsigned char CLEAR_ADDRESS[3] = { 0xd9, 0xda, 0xdc };
+    std::array<unsigned char, 4> hidOutData{}; // {} initializes all elements to zero
+    DWORD hidOutBytesReturned;
+    constexpr std::array<unsigned char, 3> CLEAR_ADDRESS = { 0xd9, 0xda, 0xdc };
 
     // Clear the line
     hidOutData[0] = CLEAR_ADDRESS[line];
@@ -292,23 +305,27 @@ void x52HID::clearMFDTextLine(int line)
     hidOutData[2] = 0;
     hidOutData[3] = 0;
 
-    BOOL result = DeviceIoControl(
+    std::lock_guard lock(deviceIoControlMutex);  // Lock to prevent simultaneous calls from different threads
+    DeviceIoControl(
         hidCreateFileHandle,
         0x223008, // dwIoControlCode, Probably a proprietary Logitech constant
-        &hidOutData,
-        sizeof(hidOutData),
-        NULL,
+        hidOutData.data(),
+        static_cast<DWORD>(hidOutData.size()),
+        nullptr,
         0,
         &hidOutBytesReturned,
-        NULL);
+        nullptr);  // lpOverlapped, NULL means synchronous (blocking) I/O
 }
 
 void x52HID::setMFDTextLine(int line, std::string text)
 {
-    unsigned char WRITE_ADDRESS[3] = { 0xd1, 0xd2, 0xd4 };
+    std::array<unsigned char, 4> hidOutData{}; // {} initializes all elements to zero
+    DWORD hidOutBytesReturned;
+    constexpr std::array<unsigned char, 3> WRITE_ADDRESS = { 0xd1, 0xd2, 0xd4 };
 
     clearMFDTextLine(line);
 
+    std::lock_guard lock(deviceIoControlMutex);  // Lock to prevent simultaneous calls from different threads
     for ( size_t i = 0; i < text.length(); i+=2 )
     {
         // Do we still have at least 2 characters in the text?
@@ -326,15 +343,15 @@ void x52HID::setMFDTextLine(int line, std::string text)
         hidOutData[0] = WRITE_ADDRESS[line];
         hidOutData[1] = 0;
 
-        BOOL result = DeviceIoControl(
+        DeviceIoControl(
             hidCreateFileHandle,
             0x223008, // dwIoControlCode, Probably a proprietary Logitech constant
             &hidOutData,
             sizeof(hidOutData),
-            NULL,
+            nullptr,
             0,
             &hidOutBytesReturned,
-            NULL);
+            nullptr);  // lpOverlapped, NULL means synchronous (blocking) I/O
 
         Sleep(mfddelayms); // Delay given ms. Defaults to 0.
     }

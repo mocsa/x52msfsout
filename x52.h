@@ -27,6 +27,13 @@
 #include "SimConnect.h"
 
 #include "x52HID.h"
+#include "LedBlinker.h"
+
+#ifndef CLASS_X52_H
+#define CLASS_X52_H
+
+// Forward declaration of class LedBlinker
+class LedBlinker;
 
 class X52
 {
@@ -34,13 +41,12 @@ class X52
 public:
 	int MAX_MFD_LEN; // Max num of chars written to one MFD row
 	std::string MFD_ON_JOY[3]; // The currently displayed 3 lines of text on the MFD
-	double X52_RUN_TIME; // Absolute time in the simulator, in seconds, with double precision (5 decimals). Variable name taken from x52luaout.
 	/// <summary>
 	/// Contains the name of the current active shift state as a string.
 	/// </summary>
 	std::string CUR_SHIFT_STATE;
 	bool mfd_on, led_on;
-	bool joybuttonstates[32];
+	bool joybuttonstates[39];
 	struct LastSentPacket {
 		DWORD pdwSendID;
 		std::string message;
@@ -52,6 +58,12 @@ public:
 		EVENT_CLIENTID = 10000, // First Client Event ID to send a single command/InputEvent
 	};
 	int lastClientEventId = EVENT_CLIENTID - 1;
+	struct DataForIndicators {
+		std::string dataref;
+		std::string unit;
+		uint8_t simvarindex;
+		DOUBLE value;
+	};
 protected:
 	std::ofstream m_log_file;
 	struct SingleDataref {
@@ -60,7 +72,9 @@ protected:
 	HANDLE  hSimConnect;
 	WASimCommander::Client::WASimClient* wasimclient;
 	x52HID* x52hid;
+	LedBlinker* ledBlinker;
 	boost::property_tree::ptree* xml_file;
+	std::map<int, X52::DataForIndicators>* dataForIndicatorsMap;
 	std::map<std::string, std::string> CURRENT_LED_COLOR;
 
 // FUNCTIONS
@@ -71,7 +85,13 @@ public:
 	void set_simconnect_handle(HANDLE handle);
 	void set_wasimconnect_instance(WASimCommander::Client::WASimClient& client);
 	void set_x52HID(x52HID&);
+	void set_LedBlinker(LedBlinker&);
 	void set_xmlfile(boost::property_tree::ptree* xml_file);
+	void setDataForIndicatorsMap( std::map<int, X52::DataForIndicators>& );
+	/// <summary>
+    /// Validate that all sequence tags contain valid data.
+    /// </summary>
+	bool validateSequences();
 	void write_to_mfd(std::string line1, std::string line2, std::string line3);
 	/// <summary>
     /// Maintain the led's current color in the CURRENT_LED_COLOR map. Sets a led to a given color, if it is not already that color, according to CURRENT_LED_COLOR.
@@ -81,7 +101,7 @@ public:
     /// <returns></returns>
 	void write_led(std::string led, std::string light);
 	/// <summary>
-	/// Sets a led to a color or, if a sequence is used, sets it to the next color in the sequence. Uses X52_RUN_TIME to keep track of where we are in a sequence. This function is not called recursively.
+	/// Sets a led to a color or, if a sequence is used, sends it to the blinker thread. This function is not called recursively.
 	/// </summary>
 	/// <param name="led">The name of one of the 11 leds, for example, "t1".</param>
 	/// <param name="light">The name of a color, or "on" or "off", or a sequence.</param>
@@ -104,9 +124,8 @@ public:
 	/// https://learn.microsoft.com/en-us/cpp/build/reference/summary-visual-cpp?view=msvc-170
 	bool assignment_button_action(boost::property_tree::ptree &xmltree, int btn, std::string status);
 	/// <summary>
-	/// <summary>
 	/// A recursively called function. Checks if data has changed in MSFS and updates joystick leds.
-	/// Each led's current color in stored in the led tag's current_light attribute created during runtime. It stores the value of the light
+	/// Each led's current color is stored in the led tag's current_light attribute created during runtime. It stores the value of the light
 	/// attribute from the active state tag.
 	/// </summary>
 	/// <param name="tagname">Led or state. Initially an empty string.</param>
@@ -115,7 +134,12 @@ public:
 	/// <param name="current_light">Used during recursive calls: current color of the currently processed led.</param>
 	/// <param name="force">Passed on to the update_led function. Force the update of the led's color even if it already has that color.</param>
 	/// <returns>The light attribute of the first state tag which is true when all state tags are evaluated from inside out.</returns>
-	std::string dataref_ind_action(std::string tagname, boost::property_tree::ptree &xmltree, std::string led = "", std::string current_light = "", bool force = false);
+	std::string dataref_ind_action(std::string_view tagname, boost::property_tree::ptree &xmltree, std::string const & led, std::string const & current_light, bool force = false);
+	/// <summary>
+	/// Called by the WASimServer when a requested SimVar has changed in MSFS.
+	/// It stores the incoming value of the SimVar in dataForIndicatorsMap to be used later.
+	/// </summary>
+	void IndicatorDataCallback(const WASimCommander::Client::DataRequestRecord&);
 	/// <summary>
 	/// Handles switching a target on or off. For led on, it starts to operate leds according to XML configuration. For led off, it does nothing. For mfd on, it ???. For mfd off, it only clears the MFD text.
 	/// </summary>
@@ -136,3 +160,5 @@ public:
 	void shift_state_action(const boost::property_tree::ptree xml_file);
 	bool construct_successful();
 };
+
+#endif

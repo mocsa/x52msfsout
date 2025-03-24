@@ -39,8 +39,41 @@ void X52::set_x52HID(x52HID& instance) {
 	x52hid = &instance;
 }
 
+void X52::set_LedBlinker(LedBlinker& instance) {
+	ledBlinker = &instance;
+}
+
 void X52::set_xmlfile(boost::property_tree::ptree* file) {
 	xml_file = file;
+}
+
+void X52::setDataForIndicatorsMap(std::map<int, X52::DataForIndicators>& map) {
+	dataForIndicatorsMap = &map;
+}
+
+bool X52::validateSequences() {
+	if (xml_file->count("sequences") == 0)
+	{
+		// Nothing to validate
+		return true;
+	}
+	for (boost::property_tree::ptree::value_type& v : xml_file->get_child("sequences"))
+	{
+		if (v.first == "sequence")
+		{
+			if (v.second.get<double>("<xmlattr>.speed") > 10)
+			{
+				std::cerr << "ERROR: The speed of sequence tag " << v.second.get<std::string>("<xmlattr>.name") << " is greater than 10. The maximum allowed speed is 10.\n";
+				return false;
+			}
+		}
+		else
+		{
+			std::cerr << "ERROR: The sequences tag contains a <" << v.first << "> tag. It can only contain sequence tags.\n";
+			return false;
+		}
+	}
+	return true;
 }
 
 void X52::write_to_mfd(std::string line1, std::string line2, std::string line3) {
@@ -85,73 +118,34 @@ void X52::write_led(std::string led, std::string color) {
 }
 
 void X52::update_led(std::string led, std::string light, std::string current_light, boost::property_tree::ptree &state, bool force) {
-	int mypos;
 	// Are there sequences defined in the XML file?
 	if (xml_file->count("sequences") != 0) {
-		for (boost::property_tree::ptree::value_type& v : xml_file->get_child("sequences"))
+		for (auto& [first, second] : xml_file->get_child("sequences"))
 		{
-			if (v.first == "sequence" && light == v.second.get<std::string>("<xmlattr>.name"))
+			if (first == "sequence" && light == second.get<std::string>("<xmlattr>.name"))
 			{
 				// Found sequence tag with the name in the light variable
 				if (!state.empty())
 				{
-					// Count up time stamp with 1/speeds part of a second
-					if ( state.get<double>("<xmlattr>.timestamp",0.0) == 0.0 || // Is this the first time we encounter this sequence?
-						(X52_RUN_TIME - state.get<double>("<xmlattr>.timestamp",0.0)) > (1 / v.second.get<double>("<xmlattr>.speed")) ) // Is this the time to move to a next pos in the sequence?
-					{
-						// Time to move to next pos in sequence or first time.
-						if (v.second.get("<xmlattr>.loop","nil") == "nil")
-						{
-							v.second.put("<xmlattr>.loop", "0"); // Loop attribute in sequnce should default to 0 (repeat forever) if omitted
-						}
-						if (state.get("<xmlattr>.loop_count","nil") == "nil")
-						{
-							state.put("<xmlattr>.loop_count", 0); // First time
-						}
-						if (state.get("<xmlattr>.pos","nil") != "nil") // Position already has a value?
-						{
-							mypos = state.get<int>("<xmlattr>.pos");
-							mypos++;
-							state.put<int>("<xmlattr>.pos", mypos); // Move to next pos
-						}
-						else
-						{
-							state.put("<xmlattr>.pos", 1); // Start at first pos
-						}
-						// Have we went past the last position of the sequence?
-						if (state.get<int>("<xmlattr>.pos") > v.second.get<std::string>("<xmlattr>.pattern").length())
-						{
-							// End of pattern, move to first and increase loop-count
-							state.put("<xmlattr>.pos", 1);
-							state.put("<xmlattr>.loop_count", state.get<int>("<xmlattr>.loop_count") + 1);
-						}
-						// Are we looping forever or have we not exceeded maximum number of loops?
-						if (v.second.get<std::string>("<xmlattr>.loop") == "0" || state.get<int>("<xmlattr>.loop_count") < ( v.second.get<int>("<xmlattr>.loop") + 1 ) )
-						{
-							std::string b_light;
-							std::string pattern = v.second.get<std::string>("<xmlattr>.pattern").substr(state.get<int>("<xmlattr>.pos") - 1,1);
-							if (pattern == " ") b_light = "off";
-							else if (pattern == "a") b_light = "amber";
-							else if (pattern == "g") b_light = "green";
-							else if (pattern == "r") b_light = "red";
-							else if (pattern == "o") b_light = "on";
-							write_led(led, b_light);
-							if (state.get<double>("<xmlattr>.timestamp",0.0) == 0.0)
-							{
-								// If the states sequence has been non active, timestamp needs to be set for proper timing
-								state.put<double>("<xmlattr>.timestamp", X52_RUN_TIME);
-							}
-							else
-							{
-								state.put<double>("<xmlattr>.timestamp", state.get<double>("<xmlattr>.timestamp") + (1/v.second.get<double>("<xmlattr>.speed")));
-							}
-						}
-					}
+					LedBlinker::LedSequence ledSequence;
+					ledSequence.led = led;
+					ledSequence.sequence = second.get<std::string>("<xmlattr>.pattern");
+					ledSequence.loopCount = second.get<int>("<xmlattr>.loop", 0);
+					ledSequence.speed = second.get<int>("<xmlattr>.speed", 0);
+					// Determine the led's tick duration (time per character)
+					ledSequence.tickDuration = std::chrono::duration<double> (1.0 / ledSequence.speed);
+					ledBlinker->setLedToSequence(ledSequence);
 				}
 				return; // If matching sequence was found, no need to loop further
 			}
 		}
 	}
+	// This led will not be blinking, so make sure it
+	// stops blinking if it was blinking before.
+	LedBlinker::LedSequence ledSequence;
+	ledSequence.led = led;
+	ledSequence.sequence = ""; // Empty sequence means stop blinking
+	ledBlinker->setLedToSequence(ledSequence);
 	if (light != current_light || force) write_led(led, light);
 }
 
@@ -281,7 +275,7 @@ bool X52::assignment_button_action(boost::property_tree::ptree &xmltree, int btn
 }
 
 
-std::string X52::dataref_ind_action(std::string tagname, boost::property_tree::ptree &xmltree, std::string led, std::string current_light, bool force) {
+std::string X52::dataref_ind_action(std::string_view tagname, boost::property_tree::ptree &xmltree, std::string const & led = "", std::string const & current_light = "", bool force) {
 	std::string r;
 	boost::property_tree::ptree empty_ptree;
 	try
@@ -309,39 +303,17 @@ std::string X52::dataref_ind_action(std::string tagname, boost::property_tree::p
 			} else if (v.first == "state") { // a state tag below a led tag or below another state tag
 				r = dataref_ind_action(v.first, v.second, led, current_light, force);
 				if (r != "") { // Higher prio state was set, so reset this state's sequence timing and abort
-					xmltree.put("<xmlattr>.pos", 0);
-					xmltree.put("<xmlattr>.loop_count", 0);
-					xmltree.put<double>("<xmlattr>.timestamp", 0.0);
 					return r;
 				}
 			}
 		}
 		// No subitems to loop into, we're at bottom (innermost state)
 		if (tagname == "state") {
-			if (xmltree.get<double>("<xmlattr>.timestamp", 0.0) == 0.0 || force) // Reset sequence timing if this is first time or when forced to update
-			{
-				xmltree.put("<xmlattr>.pos", 89);
-				xmltree.put("<xmlattr>.loop_count", 0);
-				xmltree.put<double>("<xmlattr>.timestamp", 0.0);
-			}
-			double fResult = 0.;
-			std::string attr, dataref, unit;
-			size_t separatorpos;
-			attr = xmltree.get<std::string>("<xmlattr>.dataref");
-			separatorpos = attr.find("%");
-			dataref = attr.substr(0, separatorpos);
-			unit = attr.substr(separatorpos + 1);
-			// TODO Separate index from dataref name
-			wasimclient->getVariable(WASimCommander::Client::VariableRequest(dataref, unit, 0), &fResult);
-			// Evaluates dataref with op from the xml file.
-			if (evaluate_xml_op(fResult, xmltree.get<std::string>("<xmlattr>.op"))) {
+			if (evaluate_xml_op((*dataForIndicatorsMap).at(xmltree.get<int>("<xmlattr>.requestid")).value, xmltree.get<std::string>("<xmlattr>.op"))) {
 				update_led(led, xmltree.get<std::string>("<xmlattr>.light"), current_light, xmltree, force);
 				return xmltree.get<std::string>("<xmlattr>.light");
 			} else {
 				// Dataref doesn't evaluate
-				xmltree.put("<xmlattr>.pos", 0);
-				xmltree.put("<xmlattr>.loop_count", 0);
-				xmltree.put<double>("<xmlattr>.timestamp", 0.0);
 				return "";
 			}
 		}
@@ -351,6 +323,16 @@ std::string X52::dataref_ind_action(std::string tagname, boost::property_tree::p
 		return "";
 	}
 	return "";
+}
+
+void X52::IndicatorDataCallback(const WASimCommander::Client::DataRequestRecord &dr)
+{
+	double dval;
+	dr.tryConvert(dval);
+	dataForIndicatorsMap->at(dr.requestId).value = dval;
+	std::cout << "MSFS says " << dr.nameOrCode << " is now " << dval << " (in unit " << dr.unitName << ").\n";
+	dataref_ind_action("", xml_file->get_child("indicators"), "", "", true);
+	return;
 }
 
 void X52::all_on(std::string id, bool on) {

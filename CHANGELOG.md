@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.0 - 2025-03-24
+
+### Changed
+
+- Limited maximum speed of sequences to 10.
+- Read SimVars for indicators only when they change. This puts less load on the CPU and also makes the blinking of LEDs much more accurate. Also, when different indicators depend on the same simulator data (SimVar, Unit, and Index are the same) then it is requested only once.
+- No longer use a separate thread to read keyboard input.
+
+### Added
+
+- Move blinking of LEDs into a separate thread which speeds up performance of x52msfsout.
+- Re-add the Architecture diagram.
+- Use Saitek HID driver to detect joystick button clicks, instead of SimConnect. This way not only 32 but all 39 buttons can be detected. --joystick command line parameter is no longer necessary. "USB game controllers" no longer need to be open.
+- Add testing of FLAPS LEDs to Testing.md
+- New Flowchart diagram
+- Add new delta attribute to state tags.
+- Cleanup code moved into a dedicated function.
+
+### Fixed
+
+- No longer compile the Boost Program Options library into a separate DLL. Achieved by setting both "Use Static Libraries" and "Use Dynamic CRT" to Yes in VS vcpkg properties.
+- Add missing index attributes to sequence tags in default.xml. Also clarified in README.md.
+- Allocate memory for lpInBuffer at each call of DeviceIoControl because the main and blinker threads can both call it. Also, make these calls thread safe using a mutex.
+
 ## 0.3.0 - 2025-01-20
 
 ### Added
