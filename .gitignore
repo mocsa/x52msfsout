@@ -5,6 +5,8 @@
 
 vcpkg_installed/
 build/
+build*/
+doxygen_out/
 
 # User-specific files
 *.rsuser

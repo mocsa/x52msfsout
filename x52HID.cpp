@@ -32,34 +32,21 @@ int x52HID::initialize()
     if (nDevices < 1)
     {
         // Exit
-        std::cout << "ERROR: 0 RAWINPUT Devices found." << std::endl;
+        CLOG(ERROR,"toconsole", "tofile") << "0 RAWINPUT Devices found.";
         return 0;
     }
 
     // Allocate Memory For Device List
-    PRAWINPUTDEVICELIST pRawInputDeviceList;
-    pRawInputDeviceList = new RAWINPUTDEVICELIST[sizeof(RAWINPUTDEVICELIST) * nDevices];
-
-    // Got Memory?
-    if (pRawInputDeviceList == nullptr)
-    {
-        // Error
-        std::cout << "ERROR: Could not allocate memory for RAWINPUT Device List." << std::endl;
-        return 0;
-    }
+    std::vector<RAWINPUTDEVICELIST> pRawInputDeviceList(nDevices);
 
     // Fill Device List Buffer
-    int nResult;
-    nResult = GetRawInputDeviceList(pRawInputDeviceList, &nDevices, sizeof(RAWINPUTDEVICELIST));
+    int nResult = GetRawInputDeviceList(pRawInputDeviceList.data(), &nDevices, sizeof(RAWINPUTDEVICELIST));
 
     // Got Device List?
     if (nResult < 0)
     {
-        // Clean Up
-        delete[] pRawInputDeviceList;
-
         // Error
-        std::cout << "ERROR: Could not get RAWINPUT device list." << std::endl;
+        CLOG(ERROR,"toconsole", "tofile") << "Could not get RAWINPUT device list.";
         return 0;
     }
 
@@ -77,46 +64,33 @@ int x52HID::initialize()
         if (nResult < 0)
         {
             // Error
-            std::cout << "ERROR: Unable to get HID Device Name character count.. Moving to next device." << std::endl;
+            CLOG(ERROR,"toconsole", "tofile") << "Unable to get HID Device Name character count.. Moving to next device.";
 
             // Next
             continue;
         }
 
         // Allocate Memory For Device Name
-        CHAR *wcDeviceName = new CHAR[nBufferSize + 1];
-
-        // Got Memory
-        if (wcDeviceName == nullptr)
-        {
-            // Error
-            std::cout << "ERROR: Unable to allocate memory for HID Device Name.. Moving to next device." << std::endl;
-
-            // Next
-            continue;
-        }
+        std::string deviceName(nBufferSize, '\0');
 
         // Get Name
         nResult = GetRawInputDeviceInfo(pRawInputDeviceList[i].hDevice, // Device
             RIDI_DEVICENAME,                // Get Device Name
-            wcDeviceName,                   // Get Name!
+            &deviceName[0],                   // Get Name!
             &nBufferSize);                  // Char Count
 
         // Got Device Name?
         if (nResult < 0)
         {
             // Error
-            std::cout << "ERROR: Unable to get HID Device Name.. Moving to next device." << std::endl;
-
-            // Clean Up
-            delete[] wcDeviceName;
+            CLOG(ERROR,"toconsole", "tofile") << "Unable to get HID Device Name.. Moving to next device.";
 
             // Next
             continue;
         }
 
         // Set Device Info & Buffer Size
-        RID_DEVICE_INFO rdiDeviceInfo;
+        RID_DEVICE_INFO rdiDeviceInfo{};
         rdiDeviceInfo.cbSize = sizeof(RID_DEVICE_INFO);
         nBufferSize = rdiDeviceInfo.cbSize;
 
@@ -130,19 +104,19 @@ int x52HID::initialize()
         if (nResult < 0)
         {
             // Error
-            std::cout << "ERROR: Unable to read HID Device Info.. Moving to next device." << std::endl;
+            CLOG(ERROR,"toconsole", "tofile") << "Unable to read HID Device Info.. Moving to next device.";
 
             // Next
             continue;
         }
 
-        if (strstr(wcDeviceName, X52PRO_VID_PID)) {
-            hidPath = wcDeviceName; // Store the HID path
+        if (deviceName.find(X52PRO_VID_PID) != std::string::npos) {
+            hidPath = deviceName; // Store the HID path
             hidHandle = pRawInputDeviceList[i].hDevice; // Store the HID Handle
-            printf("hidHandle = %p\n", hidHandle);
+            CLOG(INFO,"toconsole", "tofile") << "hidHandle = " << hidHandle;
 
             hidCreateFileHandle = CreateFile(
-                hidPath,
+                hidPath.c_str(),
                 GENERIC_WRITE | GENERIC_READ,
                 FILE_SHARE_WRITE | FILE_SHARE_READ,
                 nullptr,
@@ -156,7 +130,7 @@ int x52HID::initialize()
     return 0;
 }
 
-CHAR* x52HID::getHIDPath() {
+std::string x52HID::getHIDPath() const {
     return hidPath;
 }
 
@@ -169,7 +143,7 @@ void x52HID::setMFDCharDelay(long delay)
     mfddelayms = delay;
 }
 
-void x52HID::setBrightness(std::string target, unsigned char brightnessValue)
+void x52HID::setBrightness(std::string_view target, unsigned char brightnessValue)
 {
     std::array<unsigned char, 4> hidOutData{}; // {} initializes all elements to zero
     DWORD hidOutBytesReturned;
@@ -200,16 +174,16 @@ void x52HID::setBrightness(std::string target, unsigned char brightnessValue)
         nullptr);  // lpOverlapped, NULL means synchronous (blocking) I/O
 
     if (!result) {
-        std::cout << "Error Sending Brightness value to joystick." << std::endl;
+        CLOG(ERROR,"toconsole", "tofile") << "Cannot send Brightness value to joystick.";
     }
 }
 
-bool x52HID::setLedColor(std::string targetLed, std::string color)
+bool x52HID::setLedColor(const std::string& targetLed, const std::string& color)
 {
     std::array<unsigned char, 4> hidOutData{}; // {} initializes all elements to zero
     DWORD hidOutBytesReturned;
     bool success = true;
-    std::map<std::string, std::vector<unsigned char>> LED_IDS {
+    std::map<std::string, std::vector<unsigned char>, std::less<>> LED_IDS {
         { "fire"     , { 1} }, // Fire button illumination on/off (color is controlled by the position of the safety cover)
         { "a"        , { 2, 3} }, // red component, green component
         { "b"        , { 4, 5} },
@@ -223,7 +197,7 @@ bool x52HID::setLedColor(std::string targetLed, std::string color)
         { "throttle" , {20} } // Throttle axis illumination on/off (color is controlled by the throttle position)
     };
 
-    std::map<std::string, std::vector<unsigned char>> LED_STATES{
+    std::map<std::string, std::vector<unsigned char>, std::less<>> LED_STATES{
         { "on"    , {1} },
         { "off"   , {0, 0} },
         { "red"   , {1, 0} },
@@ -242,7 +216,7 @@ bool x52HID::setLedColor(std::string targetLed, std::string color)
             hidOutData[2] = ledID;
             hidOutData[3] = LED_STATES[color].at(i);
 
-            BOOL result = DeviceIoControl(
+            if ( ! DeviceIoControl(
                 hidCreateFileHandle,
                 0x223008, // dwIoControlCode, Probably a proprietary Logitech constant
                 hidOutData.data(),
@@ -250,24 +224,24 @@ bool x52HID::setLedColor(std::string targetLed, std::string color)
                 nullptr,
                 0,
                 &hidOutBytesReturned,
-                nullptr);  // lpOverlapped, NULL means synchronous (blocking) I/O
-
-            if (!result) {
-                std::cout << "Error Sending Led value to joystick." << std::endl;
+                nullptr)  // lpOverlapped, NULL means synchronous (blocking) I/O
+            ) {
+                CLOG(ERROR,"toconsole", "tofile") << "Cannot send Led value to joystick.";
                 success = false;
             }
 
             i++;
         }
-        catch (const std::out_of_range&)
+        catch (const std::out_of_range& e)
         {
-            // Somebody tried to set the fire or throttle led to a color. Ignore it.
+            CLOG(WARNING, "toconsole", "tofile") << "Reading from LED_STATES[] is out of range. Probably tried to set the fire or throttle led to a color. Ignored it. Error message: " << e.what() << ".";
             return success;
         }
     }
+    return success;
 }
 
-void x52HID::setShift(std::string shiftState)
+void x52HID::setShift(std::string_view shiftState)
 {
     DWORD hidOutBytesReturned;
     std::array<unsigned char, 4> hidOutData{}; // {} initializes all elements to zero
@@ -288,7 +262,7 @@ void x52HID::setShift(std::string shiftState)
         nullptr);  // lpOverlapped, NULL means synchronous (blocking) I/O
 
     if (!result) {
-        std::cout << "Error Sending Shift state to joystick." << std::endl;
+        CLOG(ERROR,"toconsole", "tofile") << "Cannot send Shift state to joystick.";
     }
 
 }
@@ -298,6 +272,11 @@ void x52HID::clearMFDTextLine(int line)
     std::array<unsigned char, 4> hidOutData{}; // {} initializes all elements to zero
     DWORD hidOutBytesReturned;
     constexpr std::array<unsigned char, 3> CLEAR_ADDRESS = { 0xd9, 0xda, 0xdc };
+
+    // Ensure the line index is within bounds
+    if (line < 0 || line >= CLEAR_ADDRESS.size()) {
+        return;  // Handle invalid index gracefully
+    }
 
     // Clear the line
     hidOutData[0] = CLEAR_ADDRESS[line];

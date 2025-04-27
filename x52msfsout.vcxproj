@@ -80,6 +80,9 @@
       <AdditionalLibraryDirectories>libs\WASimCommander_SDK-v1.2.0.0\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>WASimClient_d.lib;hid.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /Y /I "$(ProjectDir)client_conf.ini" "$(OutDir)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -101,14 +104,19 @@
       <AdditionalLibraryDirectories>libs\WASimCommander_SDK-v1.2.0.0\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>WASimClient.lib;hid.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /Y /I "$(ProjectDir)client_conf.ini" "$(OutDir)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="easylogging++.cc" />
     <ClCompile Include="LedBlinker.cpp" />
     <ClCompile Include="x52.cpp" />
     <ClCompile Include="x52HID.cpp" />
     <ClCompile Include="x52msfsout.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="easylogging++.h" />
     <ClInclude Include="LedBlinker.h" />
     <ClInclude Include="x52.h" />
     <ClInclude Include="x52HID.h" />

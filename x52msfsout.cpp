@@ -21,6 +21,7 @@
 
 #include <iostream>
 #include <fstream>
+#include "easylogging++.h"
 #include "x52.h"
 #include "LedBlinker.h"
 #include <cstdlib>
@@ -42,6 +43,8 @@
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/program_options.hpp>
 
+INITIALIZE_EASYLOGGINGPP
+
 HANDLE  hSimConnect = NULL;
 X52 myx52;
 x52HID x52hid;
@@ -53,7 +56,7 @@ uint32_t lastIndicatorRequestID = 1;
 /// </summary>
 volatile bool exitMainWhileLoop = false;
 
-const char* ExceptionList[] = {
+const char* const ExceptionList[] = {
     "SIMCONNECT_EXCEPTION_NONE",
     "SIMCONNECT_EXCEPTION_ERROR",
     "SIMCONNECT_EXCEPTION_SIZE_MISMATCH",
@@ -104,14 +107,6 @@ struct StructData {
 	double  dataarray[100];
 };
 
-enum INPUT_ID {
-	INPUT_JOYBUTTONS,
-};
-
-enum GROUP_ID {
-	GROUP_JOYBUTTONS,
-};
-
 enum DATA_DEFINE_ID {
 	DEF_MASTER,
 	DEF_ABSTIME,
@@ -157,7 +152,7 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 				for (boost::property_tree::ptree::value_type &v : xml_file.get_child("master")) { // Read all children of master tag
 					if (v.first == "target") // only process target tags
 					{
-						myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), fmt::format( "Master tag: Simvars changed. Target id={} switch simvar={:.2f} brightness simvar={:.2f}", v.second.get<std::string>("<xmlattr>.id").c_str(), pS->dataarray[targetnumber], pS->dataarray[targetnumber + 1]));
+						CLOG(DEBUG,"toconsole", "tofile") << fmt::format( "Simulator data for Master Target '{}' has changed. Switch data is now {:.2f} and brightness data is {:.2f}.", v.second.get<std::string>("<xmlattr>.id").c_str(), pS->dataarray[targetnumber], pS->dataarray[targetnumber + 1]);
 						// Check if SimVar value equals operator in XML
 						if (myx52.evaluate_xml_op(pS->dataarray[targetnumber], v.second.get<std::string>("<xmlattr>.op"))) {
 							if (v.second.get<std::string>("<xmlattr>.on", "") != "true") {
@@ -170,7 +165,7 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 								if (v.second.get<std::string>("<xmlattr>.id") == "led") myx52.led_on = true;
 							}
 
-							myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), fmt::format( "Master tag: Target id={}, setting brightness to {:.2f}", v.second.get<std::string>("<xmlattr>.id").c_str(), (pS->dataarray[targetnumber+1] - std::stod(v.second.get<std::string>("<xmlattr>.min"))) / (std::stod(v.second.get<std::string>("<xmlattr>.max")) - std::stod(v.second.get<std::string>("<xmlattr>.min"))) * 128 * std::stod(v.second.get<std::string>("<xmlattr>.default")) / 100));
+							CLOG(DEBUG,"toconsole", "tofile") << fmt::format( "Setting brightness of Master Target '{}' to {:.2f}.", v.second.get<std::string>("<xmlattr>.id").c_str(), (pS->dataarray[targetnumber+1] - std::stod(v.second.get<std::string>("<xmlattr>.min"))) / (std::stod(v.second.get<std::string>("<xmlattr>.max")) - std::stod(v.second.get<std::string>("<xmlattr>.min"))) * 128 * std::stod(v.second.get<std::string>("<xmlattr>.default")) / 100);
 							x52hid.setBrightness(v.second.get<std::string>("<xmlattr>.id"), (pS->dataarray[targetnumber+1] - std::stod(v.second.get<std::string>("<xmlattr>.min"))) / (std::stod(v.second.get<std::string>("<xmlattr>.max")) - std::stod(v.second.get<std::string>("<xmlattr>.min"))) * 128 * std::stod(v.second.get<std::string>("<xmlattr>.default")) / 100 );
 						}
 						else
@@ -179,7 +174,7 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 								// If this target is not already off, switch it off.
 								myx52.all_on(v.second.get<std::string>("<xmlattr>.id"), false);
 								// Set this target's brightness to 0.
-								myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), fmt::format( "Master tag: Target id={}, setting brightness to zero.", v.second.get<std::string>("<xmlattr>.id").c_str()));
+								CLOG(DEBUG,"toconsole", "tofile") << fmt::format( "Setting brightness of Master Target '{}' to zero.", v.second.get<std::string>("<xmlattr>.id").c_str());
 								x52hid.setBrightness( v.second.get<std::string>("<xmlattr>.id"), 0x0);
 								// Store in the XML that this target is currently off
 								v.second.put<std::string>("<xmlattr>.on", "false");
@@ -196,6 +191,7 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 		}
 
 		default:
+			CLOG(WARNING,"toconsole", "tofile") << "Dispatcher did nothing.";
 			break;
 		}
 		break;
@@ -204,18 +200,18 @@ void CALLBACK MyDispatchProcRD(SIMCONNECT_RECV* pData, DWORD cbData, void* pCont
 	{
 		SIMCONNECT_RECV_EXCEPTION* pObjData = (SIMCONNECT_RECV_EXCEPTION*)pData;
 
-		std::cerr << "Exception: " << ExceptionList[pObjData->dwException] << std::endl;
+		CLOG(ERROR,"toconsole", "tofile") << "Exception: " << ExceptionList[pObjData->dwException];
 		if (pObjData->dwSendID == myx52.lastsentpacket.pdwSendID)
 		{
-			std::cerr << myx52.lastsentpacket.message << std::endl;
+			CLOG(ERROR,"toconsole", "tofile") << myx52.lastsentpacket.message;
 		}
 		else {
-			std::cerr << "Packet ID doesn't match. Details not found." << std::endl;
+			CLOG(ERROR,"toconsole", "tofile") << "Packet ID doesn't match. Details not found.";
 		}
 		break;
 	}
 	default:
-		printf("MyDispatchProcRD Received unhandled SIMCONNECT_RECV ID:%d\n", pData->dwID);
+		CLOG(ERROR,"toconsole", "tofile") << "MyDispatchProcRD Received unhandled SIMCONNECT_RECV ID: " << pData->dwID;
 		break;
 	}
 }
@@ -245,14 +241,13 @@ void handleRawInputData(LPARAM lParam)
 				USAGE* usages = (USAGE*)malloc(sizeof(USAGE) * usageCount);
 				HidP_GetUsages(HidP_Input, buttonCaps[i].UsagePage, 0, usages, &usageCount, data, (PCHAR)input->data.hid.bRawData, input->data.hid.dwSizeHid);
 				for (ULONG usageIndex = 0; usageIndex < usageCount; ++usageIndex) {
-					//printf("%d ", usages[usageIndex]);
 					joybuttonstatesnew[usages[usageIndex] - 1] = true;
 				}
 
 				for (USHORT buttonIndex = 0; buttonIndex < 39; ++buttonIndex) {
 					// Was the button not pressed before? The it has just been pressed.
 					if (myx52.joybuttonstates[buttonIndex] == false && joybuttonstatesnew[buttonIndex] == true) {
-						myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), "Joy Button " + std::to_string(buttonIndex + 1) + " was pressed.");
+						CLOG(TRACE,"toconsole", "tofile") << "Joy Button " << std::to_string(buttonIndex + 1) << " was pressed.";
 
 						// Carry out actions declared in the assignments tag for button press
 						myx52.assignment_button_action(xml_file.get_child("assignments"), buttonIndex + 1, "pressed");
@@ -261,15 +256,15 @@ void handleRawInputData(LPARAM lParam)
 							// Carry out actions declared in the mfd tag for buttons
 							//myx52.mfd_button_action(xml_file.get_child("mfd"), i + 1);
 						}
-						catch (const boost::property_tree::ptree_bad_path&)
+						catch (const boost::property_tree::ptree_bad_path& e)
 						{
-
+							CLOG(ERROR, "toconsole", "tofile") << "Boost ptree could not read XML path " << e.path<std::string>() << ". Error message: " << e.what() << ".";
 						}
 					}
 
 					// Button not pressed now. Was it pressed before? Then it has just been released.
 					if (myx52.joybuttonstates[buttonIndex] == true && joybuttonstatesnew[buttonIndex] == false) {
-						myx52.logg("INFO", "x52.cpp:" + std::to_string(__LINE__), "Joy Button " + std::to_string(buttonIndex + 1) + " was released.");
+						CLOG(TRACE,"toconsole", "tofile") << "Joy Button " << std::to_string(buttonIndex + 1) << " was released.";
 						// Carry out actions declared in the assignments tag for button release
 						myx52.assignment_button_action(xml_file.get_child("assignments"), buttonIndex + 1, "released");
 					}
@@ -297,13 +292,13 @@ void LogitechServiceStop()
 	LogitechServiceResults.hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_CONNECT);
 	if (LogitechServiceResults.hSCManager == NULL)
 	{
-		std::cerr << "Cannot open Windows Service manager." << "\n";
+		CLOG(FATAL,"toconsole", "tofile") << "Cannot open Windows Service manager.";
 		LogitechServiceResults.stopped = false;
 		return;
 	}
 	LogitechServiceResults.hService = OpenService(LogitechServiceResults.hSCManager, "SaiDOutput", SERVICE_STOP | SERVICE_START | SERVICE_QUERY_STATUS);
 	if (!LogitechServiceResults.hService) {
-		std::cerr << "Cannot open Logitech DirectOutput service. " << "\n";
+		CLOG(FATAL,"toconsole", "tofile") << "Cannot open Logitech DirectOutput service.";
 
 		LPSTR messageBuffer = nullptr;
 
@@ -317,7 +312,7 @@ void LogitechServiceStop()
 
 		// Free the buffer allocated by FormatMessage
 		LocalFree(messageBuffer);
-		std::cerr << message;
+		CLOG(FATAL,"toconsole", "tofile") << message;
 
 		LogitechServiceResults.stopped = false;
 		return;
@@ -326,7 +321,7 @@ void LogitechServiceStop()
 	DWORD cbBytesNeeded;
 	if (!QueryServiceStatusEx(LogitechServiceResults.hService, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof ssp, &cbBytesNeeded))
 	{
-		printf("QueryServiceStatusEx failed (%d)\n", GetLastError());
+		CLOG(FATAL,"toconsole", "tofile") << "QueryServiceStatusEx failed (" << GetLastError() << ")";
 
 		LPSTR messageBuffer = nullptr;
 
@@ -340,7 +335,7 @@ void LogitechServiceStop()
 
 		// Free the buffer allocated by FormatMessage
 		LocalFree(messageBuffer);
-		std::cerr << message;
+		CLOG(FATAL,"toconsole", "tofile") << message;
 		CloseServiceHandle(LogitechServiceResults.hService); 
 		CloseServiceHandle(LogitechServiceResults.hSCManager);
 		LogitechServiceResults.stopped = false;
@@ -348,7 +343,7 @@ void LogitechServiceStop()
 	}
 	BOOL bRet;
 	if (ssp.dwCurrentState != SERVICE_STOPPED) {
-		std::cout << "Logitech DirectOutput service is running. Trying to stop. (Current status " << ssp.dwCurrentState << ")\n";
+		CLOG(INFO,"toconsole", "tofile") << "Logitech DirectOutput service is running. Trying to stop. (Current status " << ssp.dwCurrentState << ")";
 		bRet = ControlService(LogitechServiceResults.hService, SERVICE_CONTROL_STOP, (LPSERVICE_STATUS)&ssp);
 		//assert(bRet);
 		int stopTries = 0;
@@ -357,7 +352,7 @@ void LogitechServiceStop()
 			QueryServiceStatusEx(LogitechServiceResults.hService, SC_STATUS_PROCESS_INFO, (LPBYTE)&ssp, sizeof ssp, &cbBytesNeeded);
 			if (stopTries++ == 4)
 			{
-				std::cout << "Logitech DirectOutput service took too long to stop.\n";
+				CLOG(FATAL,"toconsole", "tofile") << "Logitech DirectOutput service took too long to stop.";
 				LogitechServiceResults.stopped = false;
 				return;
 			}
@@ -366,7 +361,7 @@ void LogitechServiceStop()
 	}
 	else {
 		// Service is not running
-		std::cerr << "Logitech DirectOutput service is not running. Not trying to stop." << "\n";
+		CLOG(INFO,"toconsole", "tofile") << "Logitech DirectOutput service is not running. Not trying to stop.";
 		LogitechServiceResults.stopped = true;
 	}
 }
@@ -377,6 +372,28 @@ void LogitechServiceStart()
 	assert(bRet);
 	CloseServiceHandle(LogitechServiceResults.hService);
 	CloseServiceHandle(LogitechServiceResults.hSCManager);
+}
+
+std::string GetExecutablePath()
+{
+    wchar_t path[MAX_PATH]; // Buffer to store path
+    
+    if (GetModuleFileNameW(NULL, path, MAX_PATH) == 0)
+    {
+        CLOG(ERROR,"toconsole", "tofile") << "Failed to get executable path, error: " << GetLastError();
+        return "";
+    }
+    
+	// Keep only the path and cut-off the executable program name
+	if (wchar_t* lastSlash = wcsrchr(path, L'\\')) {  // Find the last backslash
+        *lastSlash = L'\0'; // Remove the filename by terminating the string early
+	}
+	// Convert the wide-character path into a standard UTF std::string
+    std::vector<char> buffer(wcslen(path) * 4, 0); // Allocate buffer
+    std::mbstate_t state{};
+    const wchar_t* src = path;
+    std::size_t len = std::wcsrtombs(buffer.data(), &src, buffer.size(), &state);
+    return (len != static_cast<std::size_t>(-1)) ? std::string(buffer.data(), len) : "";
 }
 
 // Mandatory window function with only default content.
@@ -404,9 +421,86 @@ HWND CreateWindowForRawInput()
 	return hwnd;
 }
 
+void SetupEasylogging()
+{
+	// Set custom defaults for easylogging++
+	// Global settings
+	el::Loggers::addFlag(el::LoggingFlag::ColoredTerminalOutput);
+	el::Loggers::addFlag(el::LoggingFlag::MultiLoggerSupport);
+	el::Loggers::addFlag(el::LoggingFlag::DisableApplicationAbortOnFatalLog);
+	// Global settings added to easylogging++.h:
+	// #define ELPP_THREAD_SAFE
+	// #define ELPP_NO_DEFAULT_LOG_FILE
+	// #define ELPP_UNICODE
+	// Global settings added to easylogging++.cc:
+	// #define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+	
+	char *dummy_argv[1];
+	// Only called because easylogging++ unicode support requires it.
+	// We deliberately not pass any command-line arguments to the function,
+	// because we'll handle that manually in AdjustEasyloggingConf().
+	START_EASYLOGGINGPP(0, dummy_argv);
+
+	// Create new logger for console logging
+	el::Loggers::getLogger("toconsole"); // Create new "toconsole" logger
+	el::Configurations consoleConf;
+	consoleConf.setGlobally(el::ConfigurationType::Format, "[%level] %msg");
+	consoleConf.setGlobally(el::ConfigurationType::ToFile, "false");
+	consoleConf.set(el::Level::Debug, el::ConfigurationType::Enabled, "false"); // Hide DEBUG by default
+	consoleConf.set(el::Level::Trace, el::ConfigurationType::Enabled, "false"); // Hide TRACE by default
+    el::Loggers::reconfigureLogger("toconsole", consoleConf);
+	
+	// Create new logger for file logging
+	el::Loggers::getLogger("tofile"); // Create new "tofile" logger
+	el::Configurations fileConf;
+	fileConf.setGlobally(el::ConfigurationType::Enabled, "false");  // Default to deactivated
+	fileConf.setGlobally(el::ConfigurationType::ToStandardOutput, "false");
+	fileConf.setGlobally(el::ConfigurationType::ToFile, "true");
+	fileConf.setGlobally(el::ConfigurationType::Format, "%datetime{%H:%m:%s,%g} %level (%fbase, %line.) %msg");
+	fileConf.setGlobally(el::ConfigurationType::Filename, GetExecutablePath() + "\\x52msfsout_log.txt");
+	fileConf.set(el::Level::Debug, el::ConfigurationType::Enabled, "false"); // Hide DEBUG by default
+	fileConf.set(el::Level::Trace, el::ConfigurationType::Enabled, "false"); // Hide TRACE by default
+	el::Loggers::reconfigureLogger("tofile", fileConf);
+}
+
+void AdjustEasyloggingConf(const bool& logtofile, const bool& logdebug, const bool& logtrace)
+{
+	// Turn on logging to file
+	if (logtofile) {
+		el::Configurations fileConf;
+		fileConf.setGlobally(el::ConfigurationType::Enabled, "true");
+		el::Loggers::reconfigureLogger("tofile", fileConf);
+		CLOG(INFO,"toconsole") << "Log is being written to " << GetExecutablePath() << "\\x52msfsout_log.txt.";
+		std::time_t t = std::time(nullptr);
+		std::tm localTime;
+		localtime_s(&localTime, &t);
+		std::ostringstream oss;
+		oss << std::put_time(&localTime, "%d %B %Y");
+		CLOG(INFO, "tofile") << "------------ x52msfsout started on " << oss.str() << " ------------";
+	}
+	if (logdebug) {
+		el::Configurations tempConf;
+		tempConf = *el::Loggers::getLogger("toconsole")->configurations();
+		tempConf.set(el::Level::Debug, el::ConfigurationType::Enabled, "true");
+		el::Loggers::reconfigureLogger("toconsole", tempConf);
+		tempConf = *el::Loggers::getLogger("tofile")->configurations();
+		tempConf.set(el::Level::Debug, el::ConfigurationType::Enabled, "true");
+		el::Loggers::reconfigureLogger("tofile", tempConf);
+	}
+	if (logtrace) {
+		el::Configurations tempConf;
+		tempConf = *el::Loggers::getLogger("toconsole")->configurations();
+		tempConf.set(el::Level::Trace, el::ConfigurationType::Enabled, "true");
+		el::Loggers::reconfigureLogger("toconsole", tempConf);
+		tempConf = *el::Loggers::getLogger("tofile")->configurations();
+		tempConf.set(el::Level::Trace, el::ConfigurationType::Enabled, "true");
+		el::Loggers::reconfigureLogger("tofile", tempConf);
+	}
+}
+
 // Signal handler for CTRL+C
 void signalHandler(int signum) {
-    std::cout << "\nCTRL+C detected! Cleaning up...\n";
+    CLOG(INFO,"toconsole", "tofile") << "CTRL+C detected! Cleaning up...";
     exitMainWhileLoop = true;
 }
 
@@ -416,9 +510,9 @@ void cleanup() {
 	{
 		SimConnect_Close(hSimConnect);
 	}
-	std::cout << "Starting Logitech DirectOutput service.\n";
+	CLOG(INFO,"toconsole", "tofile") << "Starting Logitech DirectOutput service.";
 	LogitechServiceStart();
-    std::cout << "Cleanup complete.\n";
+    CLOG(INFO,"toconsole", "tofile") << "Cleanup complete.";
 	// myx52 destructor called automatically
 	// x52HID destructor called automatically
 	// LedBlinker destructor called automatically
@@ -431,11 +525,11 @@ void handleTerminate() {
             std::rethrow_exception(eptr);
         }
     } catch (const std::exception& e) {
-        std::cerr << "Unhandled exception: " << e.what() << std::endl;
+        CLOG(ERROR,"toconsole", "tofile") << "Unhandled exception: " << e.what();
     } catch (...) {
-        std::cerr << "Unhandled unknown exception." << std::endl;
+        CLOG(ERROR,"toconsole", "tofile") << "Unhandled unknown exception.";
     }
-	std::cerr << "\nPerforming final cleanup...\n";
+	CLOG(INFO,"toconsole", "tofile") << "Performing final cleanup...";
 	cleanup();
     std::abort();
 }
@@ -482,7 +576,13 @@ void DataRequestsForIndicators(std::string tagname, boost::property_tree::ptree 
 			// If a delta is given, read it from the XML
 			if (xmltree.get("<xmlattr>.delta", "nil") != "nil")
 			{
-				delta = xmltree.get<float>("<xmlattr>.delta");
+				try {
+					delta = xmltree.get<float>("<xmlattr>.delta");
+				}
+				catch (const boost::property_tree::ptree_bad_data& e) {
+					CLOG(ERROR, "toconsole", "tofile") << "For dataref " << dataref << ", unit " << unit << ", could not convert 'delta' " << e.data<std::string>() << " to a floating-point number. Check if the decimal separator is correct for your locale. Cannot request data from MSFS. Conversion error: " << e.what() << ".";
+					return;
+				}
 			}
 			else
 			{
@@ -529,22 +629,26 @@ void DataRequestsForIndicators(std::string tagname, boost::property_tree::ptree 
 				);
 				// Store the request ID in the XML
 				xmltree.put("<xmlattr>.requestid", lastIndicatorRequestID);
-				std::cout << "Data requested via WASim for Dataref " << dataref << ", SimVarIndex " << std::to_string(simvarindex) << ", Unit: " << unit << " using RequestID " << lastIndicatorRequestID << "." << std::endl;
+				CLOG(DEBUG,"toconsole", "tofile") << "Data requested via WASim for Dataref " << dataref << ", SimVarIndex " << std::to_string(simvarindex) << ", Unit: " << unit << " using RequestID " << lastIndicatorRequestID << ".";
 				lastIndicatorRequestID++;
 			}
 		}
 	}
 	catch (const boost::property_tree::ptree_error&)
 	{
-		std::cerr << "Error with registering WASim DataRequests for indicators.\n";
+		CLOG(ERROR,"toconsole", "tofile") << "Error with registering WASim DataRequests for indicators.";
 	}
 }
 
 int main(int argc, char *argv[])
 {
 	char lastPressedKey = 'a';
+	// Command-line options
 	std::string xmlconfig;
 	long mfddelayms = 0;
+	bool logtofile = false;
+	bool logdebug = false;
+	bool logtrace = false;
 
 	HRESULT hr;
 
@@ -553,42 +657,51 @@ int main(int argc, char *argv[])
 	// Set custom terminate handler
 	std::set_terminate(handleTerminate);
 
+	SetupEasylogging();
+
 	// BEGIN Check command-line options
 	try
 	{
 		boost::program_options::options_description desc("Allowed options");
 		desc.add_options()
-			("help", "Display help message")
-			("xmlconfig", boost::program_options::value<std::string>(&xmlconfig)->required(), "XML configuration file")
-			("mfddelayms", boost::program_options::value<long>(&mfddelayms)->default_value(0), "Delay in ms after sending each character-pair to MFD. Defaults to 0ms.");
+			("help,h", "Display help message")
+			("xmlconfig,x", boost::program_options::value<std::string>(&xmlconfig)->required(), "XML configuration file")
+			("mfddelayms,m", boost::program_options::value<long>(&mfddelayms)->default_value(0), "Delay in ms after sending each character-pair to MFD. Defaults to 0ms.")
+			("logtofile,l", boost::program_options::bool_switch(&logtofile), "In addition to console, log to file with more details. File is never deleted, only appended.")
+			("logdebug,d", boost::program_options::bool_switch(&logdebug), "Debug infrequent events.")
+			("logtrace,t", boost::program_options::bool_switch(&logtrace), "Trace frequent events.")
+		;
 		boost::program_options::variables_map vm;
-		boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
-		if (vm.count("help")) {
-			std::cout << desc << "\n";
+		auto parsed_options = boost::program_options::parse_command_line(argc, argv, desc);
+		boost::program_options::store(parsed_options, vm);
+		if (vm.count("help") || parsed_options.options.empty()) {
+			std::cout << desc;
 			exit(EXIT_SUCCESS);
 		}
 		boost::program_options::notify(vm);
 	}
 	catch (const std::exception& e)
 	{
-		std::cerr << "Error with options: " << e.what() << "\n";
+		CLOG(FATAL,"toconsole", "tofile") << "Error with options: " << e.what();
 		exit(EXIT_FAILURE);
     }
     catch(...)
     {
-        std::cerr << "Unknown error during option processing!" << "\n";
+        CLOG(FATAL,"toconsole", "tofile") << "Unknown error during option processing!";
         exit(EXIT_FAILURE);
     }
 	// END Check command-line options
 
+	// Change easylogging++ configuration based on command-line parameters
+	AdjustEasyloggingConf(logtofile, logdebug, logtrace);
+
 	LogitechServiceStop(); // Puts its results into struct LogitechServiceResults
 	if (LogitechServiceResults.stopped == false) {
-        // Possible errors were already printed by LogitechServiceStop()
+        // Possible errors were already logged by LogitechServiceStop()
 		exit(EXIT_FAILURE);
 	}
 
-	std::cout << "Log is being written to x52msfsout_log.txt.\n";
-	std::cout << "Press q+Enter to quit!\n";
+	CLOG(INFO,"toconsole", "tofile") << "Press q+Enter to quit!";
 
 	// Parse the XML into the property tree.
 	try
@@ -597,7 +710,7 @@ int main(int argc, char *argv[])
 	}
 	catch (const boost::property_tree::xml_parser_error&)
 	{
-		std::cout << "Cannot open or parse XML file. Make sure it is well-formed XML.\n";
+		CLOG(FATAL,"toconsole", "tofile") << "Cannot open or parse XML file. Make sure it is well-formed XML.";
 		exit(EXIT_FAILURE);
 	}
 
@@ -611,166 +724,163 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	if (myx52.construct_successful()) {
-		if (x52hid.initialize() == 1)
-		{
-			std::cout << "HID path found: " << x52hid.getHIDPath() << std::endl;
-			myx52.set_x52HID(x52hid);
-			if (mfddelayms != 0) {
-				x52hid.setMFDCharDelay(mfddelayms);
-			}
-		}
-		else
-		{
-			std::cout << "Cannot initialize HID communication. Is X52 Pro plugged in? Is the Saitek / Logitech driver installed?" << std::endl;
-			cleanup();
-			return EXIT_FAILURE;
-		}
-
-		// Create a window to receive raw input
-		HWND hwnd = CreateWindowForRawInput();
-
-		// Connect to MSFS
-		if (SUCCEEDED(SimConnect_Open(&hSimConnect, "x52 msfs out client", NULL, 0, 0, 0)))
-		{
-			printf("\nConnected to Flight Simulator!\n");
-			myx52.set_simconnect_handle(hSimConnect);
-
-			// Connect to WASimCommander module within Simulator using default timeout period and network configuration (local Simulator)
-			WASimCommander::Client::WASimClient tempclient = WASimCommander::Client::WASimClient(0x52C11E47);  // "x52CLIENT"
-			wasimclient = &tempclient;
-			if ((hr = wasimclient->connectSimulator()) != S_OK) {
-				std::cout << "WASimClient cannot connect to Simulator, quitting. Error Code: " + hr;
-				cleanup();
-				return EXIT_FAILURE;
-			}
-			// Ping the WASimCommander server to make sure it's running and get the server version number (returns zero if no response).
-			const uint32_t wasimversion = wasimclient->pingServer();
-			if (wasimversion == 0) {
-				std::cout << "WASimClient server did not respond to ping, quitting.";
-				cleanup();
-				return EXIT_FAILURE;
-			}
-			// Decode version number to dotted format and print it
-			std::cout << "Found WASimModule Server v" << (wasimversion >> 24) << '.' << ((wasimversion >> 16) & 0xFF) << '.' << ((wasimversion >> 8) & 0xFF) << '.' << (wasimversion & 0xFF);
-			// Try to connect to the server, using default timeout value.
-			if ((hr = wasimclient->connectServer()) != S_OK) {
-				std::cout << "WASimClient Server connection failed, quitting. Error Code: " << hr;
-				cleanup();
-				return EXIT_FAILURE;
-			}
-			myx52.set_wasimconnect_instance(tempclient);
-
-			if (xml_file.count("indicators") != 0)
-			{
-				wasimclient->setDataCallback(&X52::IndicatorDataCallback, &myx52);
-				myx52.setDataForIndicatorsMap(dataForIndicatorsMap); // This should happen before registering DataRequests, because after registration the callback is immediately called and it needs to access the Map.
-				DataRequestsForIndicators("", xml_file.get_child("indicators"));
-			}
-
-			// BEGIN Request MSFS to send us all data mentioned in the master tag at Dispatch
-			std::string attr, dataref, unit;
-			size_t separatorpos;
-			for (boost::property_tree::ptree::value_type &v : xml_file.get_child("master")) { // Read all children of master tag
-				if (v.first == "target") // only process target tags
-				{
-					// For each target, request the value of switch_dataref and brightness_dataref.
-					try
-					{
-						attr = v.second.get<std::string>("<xmlattr>.switch_dataref");
-						separatorpos = attr.find("%");
-						dataref = attr.substr(0, separatorpos);
-						unit = attr.substr(separatorpos + 1);
-						// We assume, switch_dataref is not empty, because it is a mandatory attribute.
-						hr = SimConnect_AddToDataDefinition(hSimConnect, DEF_MASTER, dataref.c_str(), unit.c_str() );
-					}
-					catch (const boost::property_tree::ptree_bad_path&)
-					{
-						std::cout << "switch_dataref attribute for the " << v.second.get<std::string>("<xmlattr>.id") << " target is missing from the XML configuration! This might cause errors later!" << std::endl;
-					}
-
-					try
-					{
-						attr = v.second.get<std::string>("<xmlattr>.brightness_dataref");
-						separatorpos = attr.find("%");
-						dataref = attr.substr(0, separatorpos);
-						unit = attr.substr(separatorpos + 1);
-						// We assume, brightness_dataref is not empty, because it is a mandatory attribute.
-						hr = SimConnect_AddToDataDefinition(hSimConnect, DEF_MASTER, dataref.c_str(), unit.c_str());
-					}
-					catch (const boost::property_tree::ptree_bad_path&)
-					{
-						std::cout << "brightness_dataref attribute for the " << v.second.get<std::string>("<xmlattr>.id") << " target is missing from the XML configuration! This might cause errors later!" << std::endl;
-					}
-				}
-			}
-			hr = SimConnect_RequestDataOnSimObject(hSimConnect,
-				REQ_MASTER,
-				DEF_MASTER,
-				SIMCONNECT_SIMOBJECT_TYPE_USER,
-				SIMCONNECT_PERIOD_VISUAL_FRAME,
-				SIMCONNECT_DATA_REQUEST_FLAG_CHANGED, // Only send data when it has changed
-				0, // origin: wait 0 frames before transmission starts
-				1, // interval: wait 1 frame (interval) before sending next data
-				0  // limit: 0 = send endlessly
-			);
-			// END Request MSFS to send us all data mentioned in the master tag at Dispatch
-
-			// Initialize LEDs and MFD. Switch off LEDs which were set to a color
-			// in Windows' "USB Game Controllers" window.
-			myx52.all_on("led", false);
-			myx52.all_on("mfd", false);
-
-			// The infinite MSFS processing loop
-			MSG msg;
-
-			try
-			{
-				while (!exitMainWhileLoop)
-				{
-					// BEGIN of setting the exit variable when q key press detected
-					if (_kbhit())
-					{
-						char ch = _getche(); // Read char and also print it to the console
-						if (ch == '\r') {  
-							if (lastPressedKey == 'q') {
-								std::cout << "Exit command received.\n";
-								exitMainWhileLoop = true;
-								break;
-							}
-							lastPressedKey = 0;
-						} else {
-							lastPressedKey = ch;
-						}
-					}
-					// END of setting the exit variable when q key press detected
-
-					// Get WM_INPUT messages via the invisible window we opened above
-					if (PeekMessage(&msg, hwnd, WM_INPUT, WM_INPUT, PM_REMOVE | PM_QS_INPUT)) {
-						handleRawInputData(msg.lParam);
-					}
-
-					SimConnect_CallDispatch(hSimConnect, MyDispatchProcRD, NULL);
-				}
-			} catch (const std::exception& e) {
-				std::cerr << "Exception caught: " << e.what() << "\n";
-				cleanup();
-			} catch (...) {
-				std::cerr << "Unknown exception caught!\n";
-				cleanup();
-			}
-		}
-		else {
-			printf("\nCannot connect to Flight Simulator!");
-			cleanup();
-			return EXIT_FAILURE;
-
+	if (x52hid.initialize() == 1)
+	{
+		CLOG(DEBUG,"toconsole", "tofile") << "HID path found: " << x52hid.getHIDPath();
+		myx52.set_x52HID(x52hid);
+		if (mfddelayms != 0) {
+			x52hid.setMFDCharDelay(mfddelayms);
 		}
 	}
 	else
 	{
-		std::cout << "Cannot create X52 object.\n";
+		CLOG(FATAL,"toconsole", "tofile") << "Cannot initialize HID communication. Is X52 Pro plugged in? Is the Saitek / Logitech driver installed?";
+		cleanup();
+		return EXIT_FAILURE;
 	}
+
+	// Create a window to receive raw input
+	HWND hwnd = CreateWindowForRawInput();
+
+	// Connect to MSFS
+	if (SUCCEEDED(SimConnect_Open(&hSimConnect, "x52 msfs out client", NULL, 0, 0, 0)))
+	{
+		CLOG(INFO,"toconsole", "tofile") << "Connected to Flight Simulator via SimConnect!";
+		myx52.set_simconnect_handle(hSimConnect);
+
+		// Connect to WASimCommander module within Simulator using default timeout period and network configuration (local Simulator)
+		std::locale::global(std::locale::classic());
+		auto tempclient = WASimCommander::Client::WASimClient(0x52C11E47);  // "x52CLIENT"
+		std::locale::global(std::locale(""));
+		wasimclient = &tempclient;
+		if ((hr = wasimclient->connectSimulator()) != S_OK) {
+			CLOG(FATAL,"toconsole", "tofile") << "WASimClient cannot connect to Simulator, quitting. Error Code: " + hr;
+			cleanup();
+			return EXIT_FAILURE;
+		}
+		// Ping the WASimCommander server to make sure it's running and get the server version number (returns zero if no response).
+		const uint32_t wasimversion = wasimclient->pingServer();
+		if (wasimversion == 0) {
+			CLOG(FATAL,"toconsole", "tofile") << "WASimClient server did not respond to ping, quitting.";
+			cleanup();
+			return EXIT_FAILURE;
+		}
+		// Decode version number to dotted format and print it
+		CLOG(INFO,"toconsole", "tofile") << "Found WASimModule Server v" << (wasimversion >> 24) << '.' << ((wasimversion >> 16) & 0xFF) << '.' << ((wasimversion >> 8) & 0xFF) << '.' << (wasimversion & 0xFF);
+		// Try to connect to the server, using default timeout value.
+		if ((hr = wasimclient->connectServer()) != S_OK) {
+			CLOG(FATAL,"toconsole", "tofile") << "WASimClient Server connection failed, quitting. Error Code: " << hr;
+			cleanup();
+			return EXIT_FAILURE;
+		}
+		myx52.set_wasimconnect_instance(tempclient);
+
+		if (xml_file.count("indicators") != 0)
+		{
+			wasimclient->setDataCallback(&X52::IndicatorDataCallback, &myx52);
+			myx52.setDataForIndicatorsMap(dataForIndicatorsMap); // This should happen before registering DataRequests, because after registration the callback is immediately called and it needs to access the Map.
+			DataRequestsForIndicators("", xml_file.get_child("indicators"));
+		}
+
+		// BEGIN Request MSFS to send us all data mentioned in the master tag at Dispatch
+		std::string attr, dataref, unit;
+		size_t separatorpos;
+		for (boost::property_tree::ptree::value_type &v : xml_file.get_child("master")) { // Read all children of master tag
+			if (v.first == "target") // only process target tags
+			{
+				// For each target, request the value of switch_dataref and brightness_dataref.
+				try
+				{
+					attr = v.second.get<std::string>("<xmlattr>.switch_dataref");
+					separatorpos = attr.find("%");
+					dataref = attr.substr(0, separatorpos);
+					unit = attr.substr(separatorpos + 1);
+					// We assume, switch_dataref is not empty, because it is a mandatory attribute.
+					hr = SimConnect_AddToDataDefinition(hSimConnect, DEF_MASTER, dataref.c_str(), unit.c_str() );
+				}
+				catch (const boost::property_tree::ptree_bad_path&)
+				{
+					CLOG(WARNING,"toconsole", "tofile") << "switch_dataref attribute for the " << v.second.get<std::string>("<xmlattr>.id") << " target is missing from the XML configuration! This might cause errors later!";
+				}
+
+				try
+				{
+					attr = v.second.get<std::string>("<xmlattr>.brightness_dataref");
+					separatorpos = attr.find("%");
+					dataref = attr.substr(0, separatorpos);
+					unit = attr.substr(separatorpos + 1);
+					// We assume, brightness_dataref is not empty, because it is a mandatory attribute.
+					hr = SimConnect_AddToDataDefinition(hSimConnect, DEF_MASTER, dataref.c_str(), unit.c_str());
+				}
+				catch (const boost::property_tree::ptree_bad_path&)
+				{
+					CLOG(WARNING,"toconsole", "tofile") << "brightness_dataref attribute for the " << v.second.get<std::string>("<xmlattr>.id") << " target is missing from the XML configuration! This might cause errors later!";
+				}
+			}
+		}
+		hr = SimConnect_RequestDataOnSimObject(hSimConnect,
+			REQ_MASTER,
+			DEF_MASTER,
+			SIMCONNECT_SIMOBJECT_TYPE_USER,
+			SIMCONNECT_PERIOD_VISUAL_FRAME,
+			SIMCONNECT_DATA_REQUEST_FLAG_CHANGED, // Only send data when it has changed
+			0, // origin: wait 0 frames before transmission starts
+			1, // interval: wait 1 frame (interval) before sending next data
+			0  // limit: 0 = send endlessly
+		);
+		// END Request MSFS to send us all data mentioned in the master tag at Dispatch
+
+		// Initialize LEDs and MFD. Switch off LEDs which were set to a color
+		// in Windows' "USB Game Controllers" window.
+		myx52.all_on("led", false);
+		myx52.all_on("mfd", false);
+
+		// The infinite MSFS processing loop
+		MSG msg;
+
+		try
+		{
+			while (!exitMainWhileLoop)
+			{
+				// BEGIN of setting the exit variable when q key press detected
+				if (_kbhit())
+				{
+					char ch = _getche(); // Read char and also print it to the console
+					if (ch == '\r') {  
+						if (lastPressedKey == 'q') {
+							CLOG(INFO,"toconsole", "tofile") << "Exit command received.";
+							exitMainWhileLoop = true;
+							break;
+						}
+						lastPressedKey = 0;
+					} else {
+						lastPressedKey = ch;
+					}
+				}
+				// END of setting the exit variable when q key press detected
+
+				// Get WM_INPUT messages via the invisible window we opened above
+				if (PeekMessage(&msg, hwnd, WM_INPUT, WM_INPUT, PM_REMOVE | PM_QS_INPUT)) {
+					handleRawInputData(msg.lParam);
+				}
+
+				SimConnect_CallDispatch(hSimConnect, MyDispatchProcRD, NULL);
+			}
+		} catch (const std::exception& e) {
+			CLOG(FATAL,"toconsole", "tofile") << "Exception caught: " << e.what();
+			cleanup();
+		} catch (...) {
+			CLOG(FATAL,"toconsole", "tofile") << "Unknown exception caught!";
+			cleanup();
+		}
+	}
+	else {
+		CLOG(FATAL,"toconsole", "tofile") << "Cannot connect to Flight Simulator!";
+		cleanup();
+		return EXIT_FAILURE;
+
+	}
+
 	
 	cleanup();
 	return EXIT_SUCCESS;

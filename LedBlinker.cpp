@@ -1,4 +1,4 @@
-﻿/*
+/*
     Copyright (C) 2023  Csaba K Molnár
 
     This program is free software: you can redistribute it and/or modify
@@ -34,7 +34,17 @@ void LedBlinker::set_x52(X52& instance) {
 }
 
 void LedBlinker::setLedToSequence(LedBlinker::LedSequence& newData) {
+    std::string looptext;
+
     std::unique_lock lock(sequencesVectorMutex); // Exclusive lock for writing
+
+    // Assemble text for log message
+    if(newData.loopCount == 0) {
+        looptext = "infinitely";
+    } else {
+        looptext = std::to_string(newData.loopCount) + " times";
+    }
+
     // Find the first (and only) matching LED
     auto it = std::find_if(sequencesVector.begin(), sequencesVector.end(),
     [&newData](const LedSequence& p) { return p.led == newData.led; });
@@ -57,7 +67,11 @@ void LedBlinker::setLedToSequence(LedBlinker::LedSequence& newData) {
             // We already have this LED but a new
             // sequence was requested. Replace old
             // sequence with new and reset start_time.
+            CLOG(DEBUG,"toconsole", "tofile") << "Old sequence '" << it->sequence << "' for " << newData.led << " is replaced with '" << newData.sequence << "' and will be looped " << looptext << ". Speed " << newData.speed << ". LastPrintedTick " << newData.lastPrintedTick << ".";
             it->sequence = newData.sequence;
+            it->speed    = newData.speed;
+            it->tickDuration = std::chrono::duration<double> (1.0 / newData.speed);
+            it->loopCount = newData.loopCount;
             it->start_time = std::chrono::steady_clock::now();
         }
     }
@@ -69,7 +83,7 @@ void LedBlinker::setLedToSequence(LedBlinker::LedSequence& newData) {
         {
             newData.start_time = std::chrono::steady_clock::now();
             sequencesVector.push_back(newData);
-            std::cout << "New sequence for " << newData.led << " is '" << newData.sequence << "'. Speed " << newData.speed << ". LastPrintedTick " << newData.lastPrintedTick << ".\n";
+            CLOG(DEBUG,"toconsole", "tofile") << "New sequence for " << newData.led << " is '" << newData.sequence << "' and will be looped " << looptext << ". Speed " << newData.speed << ". LastPrintedTick " << newData.lastPrintedTick << ".";
         }
     }
 }

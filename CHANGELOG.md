@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.0 - 2025-04-27
+
+### Changed
+
+- Use easylogging++ universally to log all messages. Use version v9.97.1 commit 607bb08.
+- Do not log to file by default, only if --logtofile or -l option is specified.
+
+### Added
+
+- Add the new client_conf.ini file to the build which contains settings for WASimClient.
+- Add new DEBUG log level, which logs infrequent events.
+- Do not display DEBUG messages by default, only if --logdebug or -d option is specified.
+- Add new TRACE log level, which logs frequent events.
+- Do not display TRACE messages by default, only if --logtrace or -t option is specified.
+- Add many new log messages and improve some old ones.
+- Doxygen configuration added.
+- Improve error handling for delta values with decimals.
+
+### Fixed
+
+- Bugfix: blinking speed and loopcount should not stick to first set value.
+- Display list of command line options if no options were provided.
+
 ## 0.4.0 - 2025-03-24
 
 ### Changed

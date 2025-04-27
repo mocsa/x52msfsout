@@ -1,24 +1,24 @@
 # Test
 
 - Plug in X52Pro
-- Start the "X52 Professional H.O.T.A.S." application. On the Programming tab, send out the provided "x52LuaOut clear.pr0" file so that the throttle scroll wheel will not work as zoom in MSFS.
+- Start the "X52 Professional H.O.T.A.S." application. On the Programming tab, send out the provided "x52LuaOut clear.pr0" file so that the throttle scroll wheel will not function as zoom and throttle mouse button will not function as left mouse button in MSFS.
 - Open services.msc and scroll down to the "Logitech DirectOutput" service. Make sure it is running.
 - Start MSFS
 - cd into the directory where x52msfsout.exe is.
 - Start x52msfsout with default_invalid.xml in this repository. It should quit with an error.
 - Load a flight with C152 at a parking spot.
 - Open Devmode -> Tools -> SimConnect Inspector.
-- Start x52msfsout.
+- Start x52msfsout like this: .\x52msfsout.exe --xmlconfig default.xml -l -d -t
 - In services.msc, refresh the window and check that the "Logitech DirectOutput" service has been stopped.
 - Battery Master switch ON (the right side one of the two red switches). LEDs and MFD should stay off, because currently their brightness is zero.
 - Dome light should change the brightness of the MFD, the Mode LED, the pov LED, and the blinking d LED.
 - LED's brightness should be 50% when dome light is at maximum.
 - When Battery Master switch is switched off, MFD and LEDs should switch off and MFD texts should be cleared.
 - Battery Master switch ON
-- Pressing Pinkie button should write ‘mode1_shiftStick’ into x52msfsout_log.txt.
+- Pressing Pinkie button should log ‘mode1_shiftStick’.
 
-- Moving the Mode Wheel to 2 should write "Shift state was cleared." and "Joy Button 29 was pressed" into logfile. Also, the SHIFT indicator on the MFD should switch off.
-- Moving the Mode Wheel to 3 should write New shift state: mode3 into logfile, and the SHIFT indicator on the MFD should switch on.
+- Moving the Mode Wheel to 2 should log "Shift state was cleared." and "Joy Button 29 was pressed". Also, the SHIFT indicator on the MFD should switch off.
+- Moving the Mode Wheel to 3 should log "New shift state: mode3", and the SHIFT indicator on the MFD should switch on.
 - Switch back to Mode 1.
 - Throttle scrollwheel down should move elevator trim nose down. This is done using an InputEvent.
 - Throttle scrollwheel up should move elevator trim nose up. This is done using an InputEvent.
@@ -32,5 +32,6 @@
   - one ClearDataDefinition EXCEPTION_UNRECOGNIZED_ID
   - on the command line one MyDispatchProcRD Received unhandled SIMCONNECT_RECV ID:2
 - Quit x52msfsout by q+Enter.
+- Check that a log was written to x52msfsout_log.txt and it contained DEBUG and TRACE messages.
 - In services.msc, refresh the window and check that the "Logitech DirectOutput" service is running again.
 

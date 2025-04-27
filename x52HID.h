@@ -7,6 +7,9 @@
 #include <array>
 #include <mutex>
 #include <Windows.h>
+#ifndef EASYLOGGINGPP_H
+#include "easylogging++.h"
+#endif
 
 /// <summary>The x52HID class allows two-way communication with a Saitek / Logitech X52Pro joystick using the factory drivers</summary>
 class x52HID
@@ -24,7 +27,7 @@ public:
     /// </summary>
     /// <returns>int 1 means that a HID path was found</returns>
     int initialize();
-    CHAR* getHIDPath();
+    std::string getHIDPath() const;
     HANDLE getHIDHandle();
     void setMFDCharDelay(long delay);
     /// <summary>
@@ -32,7 +35,7 @@ public:
     /// </summary>
     /// <param name="target">Contains the string mfd or something else for led.</param>
     /// <param name="brightnessValue">A value between 0 and 128</param>
-    void setBrightness(std::string target, unsigned char value);
+    void setBrightness(std::string_view target, unsigned char value);
     /// <summary>
     /// DO NOT CALL DIRECTLY! ALWAYS CALL write_led() IN X52 CLASS!
     /// Sets a led to a given color.
@@ -40,12 +43,12 @@ public:
     /// <param name="targetLed">The name of one of the 11 leds, for example, "t1". See the source for all names.</param>
     /// <param name="color">The string "off", "red", "green", "amber" for lights with 2 physical leds. "on" and "off" for lights with 1 physical led, that is fire and throttle, whose color is controlled by the joystick.</param>
     /// <returns></returns>
-    bool setLedColor(std::string targetLed, std::string color);
+    bool setLedColor(const std::string& targetLed, const std::string& color);
     /// <summary>
     /// Turns on or off the SHIFT indicator on the MFD
     /// </summary>
     /// <param name="shiftState">The string "on" or "off"</param>
-    void setShift(std::string shiftState);
+    void setShift(std::string_view shiftState);
     /// <summary>
     /// Clear the given line on the MFD.
     /// </summary>
@@ -62,11 +65,11 @@ private:
     /// <summary>
     /// HID path of X52 Pro. Looks like \\?\HID#VID_06A3&PID_0762#8&2c8f587f&1&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}
     /// </summary>
-    CHAR* hidPath;
+    std::string hidPath;
     HANDLE hidHandle;
     HANDLE hidCreateFileHandle;
     std::mutex deviceIoControlMutex;
-    const char X52PRO_VID_PID[18] = "VID_06A3&PID_0762";
+    std::string X52PRO_VID_PID = "VID_06A3&PID_0762";
     /// <summary>
     /// Delay in ms after sending each character to MFD. Defaults to 0ms.
     /// </summary>

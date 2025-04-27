@@ -17,16 +17,6 @@
 
 #include "x52.h"
 
-void X52::logg(std::string status, std::string func, std::string msg) {
-	std::time_t now_c = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-	m_log_file
-		<< std::put_time(std::localtime(&now_c), "%Y-%m-%d %H.%M.%S")
-		<< " [" << status << "]"
-		<< " (" << func << ")"
-		<< " " << msg
-		<< std::endl;
-}
-
 void X52::set_simconnect_handle(HANDLE handle) {
 	hSimConnect = handle;
 }
@@ -63,20 +53,20 @@ bool X52::validateSequences() {
 		{
 			if (v.second.get<double>("<xmlattr>.speed") > 10)
 			{
-				std::cerr << "ERROR: The speed of sequence tag " << v.second.get<std::string>("<xmlattr>.name") << " is greater than 10. The maximum allowed speed is 10.\n";
+				CLOG(ERROR,"toconsole", "tofile") << "The speed of sequence tag " << v.second.get<std::string>("<xmlattr>.name") << " is greater than 10. The maximum allowed speed is 10.";
 				return false;
 			}
 		}
 		else
 		{
-			std::cerr << "ERROR: The sequences tag contains a <" << v.first << "> tag. It can only contain sequence tags.\n";
+			CLOG(ERROR,"toconsole", "tofile") << "The sequences tag contains a <" << v.first << "> tag. It can only contain sequence tags.";
 			return false;
 		}
 	}
 	return true;
 }
 
-void X52::write_to_mfd(std::string line1, std::string line2, std::string line3) {
+void X52::write_to_mfd(std::string& line1, std::string& line2, std::string& line3) {
 	if (MFD_ON_JOY[0] != line1) {
 		x52hid->setMFDTextLine(0, line1);
 	}
@@ -91,7 +81,7 @@ void X52::write_to_mfd(std::string line1, std::string line2, std::string line3) 
 	MFD_ON_JOY[2] = line3;
 }
 
-void X52::write_led(std::string led, std::string color) {
+void X52::write_led(const std::string& led, const std::string& color) {
 	if (CURRENT_LED_COLOR.empty())
 	{
 		// Initially all leds are off
@@ -113,7 +103,8 @@ void X52::write_led(std::string led, std::string color) {
 		if (x52hid->setLedColor(led, color))
 		{
 			CURRENT_LED_COLOR[led] = color;
-	}
+			CLOG(TRACE,"toconsole", "tofile") << "Color of LED \"" << led << "\" was successfully set to \"" << color << "\".";
+		}
 }
 }
 
@@ -212,10 +203,10 @@ void X52::execute_button_press(boost::property_tree::ptree &xmltree, int btn) {
 				double fResult = 0.;
 				std::string sResult {};
 				if (wasimclient->executeCalculatorCode(calc_code, WASimCommander::Enums::CalcResultType::Double, &fResult, &sResult) == S_OK) {
-					std::cout << "Calculator code " << quoted(calc_code) << " returned: " << fResult << " and " << quoted(sResult) << std::endl;
+					CLOG(DEBUG,"toconsole", "tofile") << "Calculator code \"" << calc_code << "\" numerical result = " << fResult << ", string result = \"" << sResult << "\".";
 				}
 				else {
-					std::cout << "Calculator code " << quoted(calc_code) << " could not be executed. Returned: " << fResult << " and " << quoted(sResult) << std::endl;
+					CLOG(DEBUG,"toconsole", "tofile") << "Calculator code \"" << calc_code << "\" could not be executed. Numerical result = " << fResult << ", string result = \"" << sResult << "\".";
 				}
 			}
 			xmltree.put("<xmlattr>.pressed","true");
@@ -223,7 +214,7 @@ void X52::execute_button_press(boost::property_tree::ptree &xmltree, int btn) {
 	}
 }
 
-void X52::execute_button_release(boost::property_tree::ptree& xmltree, int btn) {
+void X52::execute_button_release(boost::property_tree::ptree& xmltree, int btn) const {
 	xmltree.put("<xmlattr>.press_time","");
 	xmltree.put("<xmlattr>.pressed","");
 	xmltree.put("<xmlattr>.in_repeat","");
@@ -268,8 +259,9 @@ bool X52::assignment_button_action(boost::property_tree::ptree &xmltree, int btn
 		}
 		return false;
 	}
-	catch (const boost::property_tree::ptree_error&)
+	catch (const boost::property_tree::ptree_error& e)
 	{
+		CLOG(ERROR, "toconsole", "tofile") << "Boost ptree had problems with XML processing. Button = " << btn << ", status = " << status << ". Error message : " << e.what() << ".";
 		return false;
 	}
 }
@@ -288,7 +280,7 @@ std::string X52::dataref_ind_action(std::string_view tagname, boost::property_tr
 				{
 					r = dataref_ind_action(v.first, v.second, v.second.get<std::string>("<xmlattr>.id"), v.second.get<std::string>("<xmlattr>.current_light",""), force);
 					if (r == "") { // No state evaluates to true, set led to off
-						update_led(v.second.get<std::string>("<xmlattr>.id"), "off", v.second.get<std::string>("<xmlattr>.current_light"), v.second, force);
+						update_led(v.second.get<std::string>("<xmlattr>.id"), "off", v.second.get<std::string>("<xmlattr>.current_light",""), v.second, force);
 						v.second.put("<xmlattr>.current_light", "off");
 					} else {
 						v.second.put("<xmlattr>.current_light", r);
@@ -330,8 +322,8 @@ void X52::IndicatorDataCallback(const WASimCommander::Client::DataRequestRecord 
 	double dval;
 	dr.tryConvert(dval);
 	dataForIndicatorsMap->at(dr.requestId).value = dval;
-	std::cout << "MSFS says " << dr.nameOrCode << " is now " << dval << " (in unit " << dr.unitName << ").\n";
-	dataref_ind_action("", xml_file->get_child("indicators"), "", "", true);
+	CLOG(DEBUG,"toconsole", "tofile") << "MSFS says " << dr.nameOrCode << " is now " << dval << " (in unit " << dr.unitName << ").";
+	dataref_ind_action("", xml_file->get_child("indicators"), "", "", false);
 	return;
 }
 
@@ -380,7 +372,7 @@ bool X52::shift_state_active(const boost::property_tree::ptree xmltree) {
 					// Is this newly found state different from the current one?
 					if (CUR_SHIFT_STATE != v.second.get<std::string>("<xmlattr>.name")) {
 						CUR_SHIFT_STATE = v.second.get<std::string>("<xmlattr>.name");
-						logg("INFO", "x52.cpp:" + std::to_string(__LINE__), "New shift state: " + CUR_SHIFT_STATE);
+						CLOG(DEBUG,"toconsole", "tofile") << "New shift state: " + CUR_SHIFT_STATE;
 						if(mfd_on) {
 							// X52.activate_page(X52.ACTIVE_PAGE)
 						}
@@ -394,35 +386,27 @@ bool X52::shift_state_active(const boost::property_tree::ptree xmltree) {
 	return false;
 }
 
-void X52::shift_state_action(const boost::property_tree::ptree xml_file) {
+void X52::shift_state_action(const boost::property_tree::ptree& xmltree) {
 	try
 	{
-		if (!shift_state_active(xml_file.get_child("shift_states")) && !CUR_SHIFT_STATE.empty() )
+		if (!shift_state_active(xmltree.get_child("shift_states")) && !CUR_SHIFT_STATE.empty() )
 		{
 			x52hid->setShift("off");
 			CUR_SHIFT_STATE.clear();
-			logg("INFO", "x52.cpp:" + std::to_string(__LINE__), "Shift state was cleared.");
+			CLOG(DEBUG,"toconsole", "tofile") << "Shift state was cleared.";
 			if (mfd_on) {
 				// X52.activate_page(X52.ACTIVE_PAGE)
 			}
 		}
 	}
-	catch (const boost::property_tree::ptree_error&)
+	catch (const boost::property_tree::ptree_error& e)
 	{
-
+		CLOG(ERROR, "toconsole", "tofile") << "Boost ptree had problems with processing shift_states tags. Error message: " << e.what() << ".";
+		return;
 	}
 }
 
-bool X52::construct_successful() {
-    if (m_log_file.is_open()) {
-        return true;
-    }
-    return false;
-}
-
 X52::X52() {
-	// Open log file
-	m_log_file.open("x52msfsout_log.txt");
 // Detect OS: https://stackoverflow.com/questions/5919996/
 #if defined(__linux__) || defined(__APPLE__)
     MAX_MFD_LEN = 16;
@@ -430,8 +414,4 @@ X52::X52() {
     MAX_MFD_LEN = 15;
 #endif
 
-}
-
-X52::~X52() {
-	m_log_file.close();
 }

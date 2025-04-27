@@ -127,10 +127,13 @@ Start MSFS.
 
 Start your flight.
 
-Start a command prompt and change the directory to where x52msfsout.exe is. Start x52msfsout.exe and make sure you specify the required command line options:
+Start a command prompt and change the directory to where x52msfsout.exe is. Start x52msfsout.exe and make sure you specify the required `xmlconfig` command line option (short form is `x`). This tells the program which XML config file to use (you can have different files for different aircrafts). The XML files are not opened automatically based on the aircraft’s name like in X52LuaOut.
 
-- `help` displays all possible options
-- `xmlconfig` Required! Tells the program which XML config file to use (you can have different files for different aircrafts). The XML files are not opened automatically based on the aircraft’s name like in X52LuaOut.
+You can also use the following optional command line options:
+- `h` or `help` displays all possible options. You will see the same if you start x52msfsout without any options.
+- `l` or `logtofile` makes x52msfsout to log not only to console but to a file `x52msfsout_log.txt`, as well. The file is placed next to x52msfsout.exe and contains additional details compared to the console log. File is never deleted, only appended.
+- `d` or `logdebug` expand the log with additional messages which happen infrequently.
+- `t` or `logtrace` expand the log with additional messages which happen frequently.
 
 # Contributing
 

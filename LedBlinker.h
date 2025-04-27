@@ -25,6 +25,9 @@
 #include <mutex>
 #include <shared_mutex>
 #include <cmath>
+#ifndef EASYLOGGINGPP_H
+#include "easylogging++.h"
+#endif
 
 #ifndef CLASS_LEDBLINKER_H
 #define CLASS_LEDBLINKER_H

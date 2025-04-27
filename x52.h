@@ -16,9 +16,6 @@
 */
 
 #include <boost/property_tree/ptree.hpp>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
 #include <string>
 #include <windows.h>
 #define WSMCMND_API_STATIC
@@ -28,6 +25,9 @@
 
 #include "x52HID.h"
 #include "LedBlinker.h"
+#ifndef EASYLOGGINGPP_H
+#include "easylogging++.h"
+#endif
 
 #ifndef CLASS_X52_H
 #define CLASS_X52_H
@@ -65,7 +65,6 @@ public:
 		DOUBLE value;
 	};
 protected:
-	std::ofstream m_log_file;
 	struct SingleDataref {
 		double  dataref[1];
 	};
@@ -80,8 +79,6 @@ protected:
 // FUNCTIONS
 public:
 	X52();
-	~X52();
-	void logg(std::string status, std::string func, std::string msg);
 	void set_simconnect_handle(HANDLE handle);
 	void set_wasimconnect_instance(WASimCommander::Client::WASimClient& client);
 	void set_x52HID(x52HID&);
@@ -92,14 +89,14 @@ public:
     /// Validate that all sequence tags contain valid data.
     /// </summary>
 	bool validateSequences();
-	void write_to_mfd(std::string line1, std::string line2, std::string line3);
+	void write_to_mfd(std::string& line1, std::string& line2, std::string& line3);
 	/// <summary>
     /// Maintain the led's current color in the CURRENT_LED_COLOR map. Sets a led to a given color, if it is not already that color, according to CURRENT_LED_COLOR.
     /// </summary>
     /// <param name="led">The name of one of the 11 leds, for example, "t1". See the source for all names.</param>
     /// <param name="light">The string "off", "red", "green", "amber" for lights with 2 physical leds. "on" and "off" for lights with 1 physical led, that is fire and throttle, whose color is controlled by the joystick.</param>
     /// <returns></returns>
-	void write_led(std::string led, std::string light);
+	void write_led(const std::string& led, const std::string& light);
 	/// <summary>
 	/// Sets a led to a color or, if a sequence is used, sends it to the blinker thread. This function is not called recursively.
 	/// </summary>
@@ -117,14 +114,15 @@ public:
 	/// <returns></returns>
 	bool evaluate_xml_op(double simvarvalue, std::string op);
 	void execute_button_press(boost::property_tree::ptree &xmltree, int btn);
-	void execute_button_release(boost::property_tree::ptree &xmltree, int btn);
+	void execute_button_release(boost::property_tree::ptree &xmltree, int btn) const;
 	/// <summary>This method is called recursively to process elements under the assignments tag.</summary>
 	/// <param name="xmltree">A Property Tree of EITHER all button tags under the assignments tag OR a button tag OR a shifted_button tag under a button tag.</param>
 	/// <param name="status">Contains the string pressed or released.</param>
 	/// https://learn.microsoft.com/en-us/cpp/build/reference/summary-visual-cpp?view=msvc-170
 	bool assignment_button_action(boost::property_tree::ptree &xmltree, int btn, std::string status);
 	/// <summary>
-	/// A recursively called function. Checks if data has changed in MSFS and updates joystick leds.
+	/// Goes through all led and state tags inside the indicators tag by recursively calling itself. Evaluates the op attribute of every state tag
+	/// using the simulator data stored in dataForIndicatorsMap and updates joystick leds.
 	/// Each led's current color is stored in the led tag's current_light attribute created during runtime. It stores the value of the light
 	/// attribute from the active state tag.
 	/// </summary>
@@ -157,8 +155,7 @@ public:
 	/// Initiates the calling of the recursive shift_state_active function and handles the case when no active shift state was found.
 	/// </summary>
 	/// <param name="xml_file">Pointer to the whole XML configuration file.</param>
-	void shift_state_action(const boost::property_tree::ptree xml_file);
-	bool construct_successful();
+	void shift_state_action(const boost::property_tree::ptree& xml_file);
 };
 
 #endif
